@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Desktop Light Theme ===== */
+:root {
+  --color-app-bg: #F2F3F5;
+  --color-app-card: #FFFFFF;
+  --color-app-border: #E5E5EA;
+  --color-app-text: #1D1D1F;
+  --color-app-subtext: #86868B;
+  --color-app-blue: #007AFF;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  min-height: 100vh;
+  background: #F2F3F5;
+  color: var(--color-app-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Apple-style scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #C7C7CC; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #AEAEB2; }
+
+/* ===== Apple Glass Effect ===== */
+@layer components {
+  .glass {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  .card {
+    background: #FFFFFF;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .card-hoverable {
+    background: #FFFFFF;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    transition: all 0.2s ease;
+  }
+  .card-hoverable:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    transform: translateY(-1px);
+  }
+
+  .interaction-bar {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 8px 0;
+    color: #86868B;
+    font-size: 13px;
+  }
+}
+
+/* ===== Markdown Content ===== */
+.markdown-body {
+  color: #1D1D1F;
+  line-height: 1.8;
+  font-size: 17px;
+  letter-spacing: -0.003em;
+}
+
+.markdown-body h1 {
+  font-size: 2em;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin: 0.8em 0 0.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid #E5E5EA;
+}
+
+.markdown-body h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  color: #1D1D1F;
+  margin: 0.7em 0 0.3em;
+}
+
+.markdown-body h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  color: #3A3A3C;
+  margin: 0.6em 0 0.3em;
+}
+
+.markdown-body p { margin: 0.6em 0; line-height: 1.8; }
+
+.markdown-body code {
+  background: #F5F5F7;
+  color: #007AFF;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.88em;
+}
+
+.markdown-body pre {
+  background: #F5F5F7;
+  border: 1px solid #E5E5EA;
+  border-radius: 12px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.markdown-body pre code {
+  background: none;
+  padding: 0;
+  color: #1D1D1F;
+}
+
+.markdown-body blockquote {
+  border-left: 4px solid #007AFF;
+  padding-left: 16px;
+  color: #86868B;
+  margin: 1em 0;
+  font-style: italic;
+}
+
+.markdown-body ul, .markdown-body ol {
+  padding-left: 1.5em;
+  margin: 0.6em 0;
+}
+
+.markdown-body li { line-height: 1.8; }
+
+.markdown-body a {
+  color: #007AFF;
+  text-decoration: none;
+}
+.markdown-body a:hover { text-decoration: underline; }
+
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 12px;
+}
+
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+}
+
+.markdown-body th, .markdown-body td {
+  border: 1px solid #E5E5EA;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-body th {
+  background: #F5F5F7;
+  font-weight: 600;
+  color: #1D1D1F;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid #E5E5EA;
+  margin: 1.5em 0;
+}
+
+/* ===== Slide-up animation ===== */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* ===== Spin (keep for loading) ===== */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}

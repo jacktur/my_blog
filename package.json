@@ -1,0 +1,14 @@
+{
+  "name": "geek-blog",
+  "version": "1.0.0",
+  "description": "极客风格个人博客系统 — React + Express + SQLite",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n BACK,FRONT -c cyan,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && node server.js",
+    "dev:frontend": "cd frontend && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
