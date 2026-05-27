@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const path = require('path');
@@ -30,8 +31,34 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// 中间件配置
-app.use(cors());
+// CORS 配置：生产环境限制来源，开发环境允许所有
+const corsOrigin = process.env.CORS_ORIGIN;
+if (corsOrigin) {
+  app.use(cors({ origin: corsOrigin.split(','), credentials: true }));
+} else {
+  app.use(cors());
+}
+
+// API 全局限流（200 次/15分钟）
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '请求过于频繁，请稍后再试' },
+});
+app.use('/api', globalLimiter);
+
+// 登录/注册接口更严格的限流（20 次/15分钟）
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '登录尝试过于频繁，请稍后再试' },
+});
+app.use('/api/auth', authLimiter);
+
 app.use(express.json({ limit: '1mb' })); // 限制请求体大小
 app.use(express.urlencoded({ extended: false }));
 
@@ -91,6 +118,16 @@ app.post("/api/articles/summarize", async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// 生产环境：托管前端构建产物，支持 SPA 路由
+if (process.env.NODE_ENV === 'production') {
+  const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+  app.use(express.static(frontendDist));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+  console.log(`[SERVER] 生产模式: 前端静态文件来自 ${frontendDist}`);
+}
 
 // 初始化数据库并启动服务
 initDatabase();
