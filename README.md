@@ -149,41 +149,128 @@ node server.js
 
 生产模式下，后端会托管 `frontend/dist`，并支持前端 SPA 路由。
 
-## VPS 部署参考
+## 当前 VPS 状态
 
-以下命令适用于常见 Linux VPS，例如 Ubuntu。请把服务器地址、用户名、项目路径替换为自己的实际信息。
-
-### 1. 连接 VPS
+Codex 当前可以通过本机 SSH 别名连接 VPS：
 
 ```bash
-ssh 用户名@服务器IP
+ssh aws-ubuntu
 ```
 
-### 2. 检查服务器环境
+已查询到的服务器状态：
+
+- 系统：Ubuntu on AWS
+- Node.js：`v20.20.2`
+- npm：`10.8.2`
+- Git：`2.53.0`
+- Nginx：`1.28.3`
+- 项目部署目录：`/var/www/my_blog`
+- 后端端口：`3001`
+- 健康检查：`http://127.0.0.1:3001/api/health`
+- Nginx 配置：`/etc/nginx/sites-available/myblog`
+- Nginx 已启用配置：`/etc/nginx/sites-enabled/myblog`
+- 当前 Nginx 状态：active
+- 当前 PM2 状态：已安装，但没有管理 `my_blog` 进程
+- 当前 Node 进程：`node /var/www/my_blog/backend/server.js`
+
+当前 Nginx 将这些路径代理到后端：
+
+- `/` -> `http://127.0.0.1:3001`
+- `/api/` -> `http://127.0.0.1:3001`
+- `/uploads/` -> `http://127.0.0.1:3001`
+
+注意：服务器上的 `/var/www/my_blog` 当前属于 `root`，使用 `ubuntu` 用户直接执行 `git status` 可能出现 `dubious ownership` 提示。维护时建议使用 `sudo git -C /var/www/my_blog ...`，或者重新整理目录所有权。
+
+## VPS 维护命令
+
+### 连接服务器
 
 ```bash
-node -v
-npm -v
-git --version
-pm2 -v
-nginx -v
+ssh aws-ubuntu
 ```
 
-如果没有安装 Node.js，建议使用 NodeSource 或 nvm 安装 Node.js 18+。
+### 查看项目状态
 
-### 3. 拉取代码
+```bash
+cd /var/www/my_blog
+sudo git status
+sudo git log -1 --oneline
+```
+
+### 查看后端是否正常
+
+```bash
+curl http://127.0.0.1:3001/api/health
+ss -ltnp | grep 3001
+ps -eo pid,ppid,user,args | grep node | grep my_blog
+```
+
+### 查看 Nginx 状态
+
+```bash
+sudo systemctl status nginx
+sudo nginx -t
+sudo cat /etc/nginx/sites-available/myblog
+```
+
+### 查看日志
+
+如果后端不是 PM2 或 systemd 管理，日志可能只在启动它的终端里。建议后续改为 PM2 管理：
+
+```bash
+cd /var/www/my_blog/backend
+sudo pm2 start server.js --name my-blog
+sudo pm2 save
+pm2 status
+pm2 logs my-blog
+```
+
+如果使用当前直接启动方式，可以先找到进程：
+
+```bash
+ps -eo pid,ppid,user,args | grep node | grep my_blog
+```
+
+### 更新线上代码
+
+因为线上目录属于 `root`，当前推荐用 `sudo` 执行维护命令：
+
+```bash
+cd /var/www/my_blog
+sudo git pull origin main
+sudo npm install
+cd backend
+sudo npm install
+cd ../frontend
+sudo npm install
+sudo npm run build
+```
+
+更新后重启后端。如果已经改用 PM2：
+
+```bash
+sudo pm2 restart my-blog
+```
+
+如果仍是直接 Node 进程，先找到旧进程并停止，再重新启动：
+
+```bash
+ps -eo pid,ppid,user,args | grep node | grep my_blog
+sudo kill <PID>
+cd /var/www/my_blog/backend
+sudo NODE_ENV=production node server.js
+```
+
+更推荐改为 PM2，避免关闭 SSH 后服务不可控。
+
+## VPS 首次部署参考
+
+如果要在一台新服务器上重新部署：
 
 ```bash
 cd /var/www
 git clone https://github.com/jacktur/my_blog.git my_blog
 cd my_blog
-```
-
-如果仓库是私有仓库，需要先配置 GitHub SSH Key，或使用有权限的访问方式。
-
-### 4. 安装依赖并配置环境变量
-
-```bash
 npm install
 cd backend
 npm install
@@ -192,7 +279,8 @@ nano .env
 cd ../frontend
 npm install
 npm run build
-cd ..
+cd ../backend
+NODE_ENV=production node server.js
 ```
 
 生产环境建议配置：
@@ -204,60 +292,14 @@ NODE_ENV=production
 CORS_ORIGIN=https://你的域名
 ```
 
-### 5. 使用 PM2 启动后端
-
-```bash
-cd /var/www/my_blog/backend
-pm2 start server.js --name my-blog
-pm2 save
-pm2 startup
-```
-
-查看状态和日志：
-
-```bash
-pm2 status
-pm2 logs my-blog
-```
-
-### 6. Nginx 反向代理示例
-
-假设域名是 `example.com`，后端运行在 `3001` 端口：
-
-```nginx
-server {
-    listen 80;
-    server_name example.com www.example.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-保存后检查并重载 Nginx：
-
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-如果开启 HTTPS，可以使用 Certbot：
-
-```bash
-sudo certbot --nginx -d example.com -d www.example.com
-```
+私有仓库不要把 GitHub token 写进 remote URL。推荐使用 SSH key、GitHub CLI，或只在需要时输入凭据。
 
 ## 数据和上传文件
 
 运行后会生成或使用这些运行时文件：
 
 - SQLite 数据库：`backend/blog.sqlite`
+- SQLite WAL 文件：`backend/blog.sqlite-wal`、`backend/blog.sqlite-shm`
 - 上传目录：`backend/uploads/`
 - 头像上传：`backend/uploads/avatars/custom/`
 - 文章封面：`backend/uploads/covers/`
@@ -267,7 +309,8 @@ sudo certbot --nginx -d example.com -d www.example.com
 备份示例：
 
 ```bash
-tar -czvf my_blog_backup.tar.gz backend/blog.sqlite backend/uploads
+cd /var/www/my_blog
+tar -czvf my_blog_backup.tar.gz backend/blog.sqlite backend/blog.sqlite-wal backend/blog.sqlite-shm backend/uploads
 ```
 
 ## 常见问题
@@ -309,14 +352,28 @@ chmod -R 755 backend/uploads
 依次检查：
 
 ```bash
-pm2 status
-pm2 logs my-blog
-sudo nginx -t
+curl http://127.0.0.1:3001/api/health
 sudo systemctl status nginx
+sudo nginx -t
+ss -ltnp | grep 3001
 sudo ufw status
 ```
 
-确认安全组或防火墙已开放 `80`、`443` 端口。
+确认云服务器安全组或防火墙已开放 `80`、`443` 端口。
+
+### 6. Git 提示 dubious ownership
+
+这是因为 `/var/www/my_blog` 当前属于 `root`，但你用 `ubuntu` 用户执行 Git。可以临时使用：
+
+```bash
+sudo git -C /var/www/my_blog status
+```
+
+也可以把目录所有权改给 `ubuntu`，但改之前要确认不会影响 Nginx、上传目录和现有进程：
+
+```bash
+sudo chown -R ubuntu:ubuntu /var/www/my_blog
+```
 
 ## 开发命令汇总
 
@@ -341,10 +398,11 @@ cd frontend && npm run preview
 
 - 不要把 `backend/.env` 提交到仓库
 - 不要把生产环境的 `JWT_SECRET` 写进 README 或截图
-- 定期备份 `backend/blog.sqlite` 和 `backend/uploads/`
-- 生产环境建议使用 PM2 管理 Node 服务
+- 不要把 GitHub token 写进 `git remote -v`
+- 定期备份 `backend/blog.sqlite`、`backend/blog.sqlite-wal`、`backend/blog.sqlite-shm` 和 `backend/uploads/`
+- 生产环境建议使用 PM2 或 systemd 管理 Node 服务
 - 使用 Nginx 代理域名和 HTTPS
-- 修改后端代码后需要重启 PM2 服务
+- 修改后端代码后需要重启 Node 服务
 
 ## License
 
