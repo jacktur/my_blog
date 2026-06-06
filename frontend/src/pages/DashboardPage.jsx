@@ -5,9 +5,11 @@ import { getDashboardApi, dailyCheckinApi } from '../api';
 import { FileText, ThumbsUp, MessageSquare, Eye, Users, UserPlus, Activity, BookOpen, Loader2, LayoutDashboard } from 'lucide-react';
 import XPProgressBar from '../components/XPProgressBar';
 import ActivityFeed from '../components/ActivityFeed';
+import { useXpNotification } from '../components/XPNotification';
 
 export default function DashboardPage() {
   const { isAuthenticated } = useAuth();
+  const { addXpToast, notifyGamification } = useXpNotification();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [streakMsg, setStreakMsg] = useState('');
@@ -17,10 +19,14 @@ export default function DashboardPage() {
     setLoading(true);
     getDashboardApi().then(r => setData(r.data)).catch(() => {}).finally(() => setLoading(false));
     dailyCheckinApi().then(r => {
-      if (r.data.bonus > 0) setStreakMsg(`签到成功! +${r.data.bonus} XP`);
+      if (r.data.bonus > 0) {
+        setStreakMsg(`签到成功! +${r.data.bonus} XP`);
+        addXpToast(r.data.bonus, 'daily_streak_bonus');
+        notifyGamification({ achievements: r.data.achievements });
+      }
       else if (r.data.alreadyCheckedIn) setStreakMsg('今日已签到');
     }).catch(() => {});
-  }, [isAuthenticated]);
+  }, [addXpToast, isAuthenticated, notifyGamification]);
 
   if (!isAuthenticated) return <div className="max-w-2xl mx-auto px-4 py-20 text-center"><p className="text-app-red text-sm">请先登录</p><Link to="/login" className="text-app-blue hover:underline mt-4 inline-block">去登录</Link></div>;
   if (loading) return <div className="flex justify-center py-20"><Loader2 size={20} className="text-app-blue animate-spin" /></div>;

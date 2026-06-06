@@ -5,11 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import { ArrowLeft, Save } from 'lucide-react';
 import TagInput from '../components/TagInput';
 import CoverImageUploader from '../components/CoverImageUploader';
+import { useXpNotification } from '../components/XPNotification';
 
 export default function CreateArticle() {
   const { id } = useParams(); const isEdit = !!id;
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const { notifyGamification } = useXpNotification();
   const [title, setTitle] = useState(''); const [content, setContent] = useState('');
   const [tags, setTags] = useState([]); const [coverImage, setCoverImage] = useState('');
   const [error, setError] = useState(''); const [loading, setLoading] = useState(false);
@@ -36,7 +38,10 @@ export default function CreateArticle() {
     try {
       const articleData = { cover_image: coverImage || undefined };
       if (isEdit) await updateArticleApi(id, t, c, tags, articleData);
-      else await createArticleApi(t, c, tags, articleData);
+      else {
+        const res = await createArticleApi(t, c, tags, articleData);
+        notifyGamification(res.data.gamification);
+      }
       navigate('/');
     } catch (err) { setError(err.response?.data?.error || '操作失败'); }
     finally { setLoading(false); }

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { dbGet, dbRun, dbAll } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { grantXP, checkAchievements, addActivity } = require('./gamification');
 
 /**
  * GET /api/bookmarks
@@ -13,10 +14,10 @@ router.get('/', authenticateToken, async (req, res) => {
     const limit = 20;
     const offset = (page - 1) * limit;
 
-    const [{ total }] = await [dbGet(
+    const { total } = await dbGet(
       'SELECT COUNT(*) as total FROM bookmarks WHERE user_id = ?',
       [req.user.id]
-    )];
+    );
 
     const bookmarks = await dbAll(
       `SELECT bookmarks.id as bookmark_id, bookmarks.created_at as bookmarked_at,
@@ -97,7 +98,11 @@ router.post('/', authenticateToken, async (req, res) => {
       [req.user.id, article_id]
     );
 
-    res.status(201).json({ bookmarked: true, message: '收藏成功' });
+    const xp = await grantXP(req.user.id, 5, 'bookmark', 'article', article_id);
+    await addActivity(req.user.id, 'bookmark', '收藏了文章 #' + article_id, 'article', article_id);
+    const achievements = await checkAchievements(req.user.id, 'bookmark');
+
+    res.status(201).json({ bookmarked: true, message: '收藏成功', gamification: { xp, achievements } });
   } catch (err) {
     console.error('[BOOKMARKS] 添加书签错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });

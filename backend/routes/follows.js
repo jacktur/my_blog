@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { dbGet, dbRun, dbAll } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { checkAchievements, addActivity } = require('./gamification');
 
 /**
  * POST /api/follows/:id
@@ -34,7 +35,10 @@ router.post('/:id', authenticateToken, async (req, res) => {
       [followerId, followingId]
     );
 
-    res.status(201).json({ message: '关注成功' });
+    await addActivity(followerId, 'follow', '关注了用户 #' + followingId, 'user', followingId);
+    const achievements = await checkAchievements(followingId, 'follow');
+
+    res.status(201).json({ message: '关注成功', gamification: { followedUserAchievements: achievements } });
   } catch (err) {
     console.error('[FOLLOWS] 关注错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });

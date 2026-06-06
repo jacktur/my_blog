@@ -27,6 +27,28 @@ const LEVELS = [
   { level: 20, xp: 55000, title: 'The Ghost in the Shell' },
 ];
 
+const ACHIEVEMENTS = [
+  { code: 'first_article', name: '首篇派送', description: '发布你的第一篇文章', icon: 'zap', xpReward: 25, trigger: 'publish_article', category: 'writing', rarity: 'common', condition: { count: 1, field: 'articles' } },
+  { code: 'prolific_writer', name: '数据洪流', description: '累计发布 10 篇文章', icon: 'layers', xpReward: 100, trigger: 'publish_article', category: 'writing', rarity: 'rare', condition: { count: 10, field: 'articles' } },
+  { code: 'first_like_received', name: '信号捕获', description: '首次收到他人的点赞', icon: 'heart', xpReward: 10, trigger: 'like_received', category: 'social', rarity: 'common', condition: { count: 1, field: 'likes' } },
+  { code: 'popular', name: '热度爆发', description: '累计收到 100 个点赞', icon: 'flame', xpReward: 200, trigger: 'like_received', category: 'social', rarity: 'epic', condition: { count: 100, field: 'likes' } },
+  { code: 'commentator', name: '数据包发送者', description: '累计发表 25 条评论', icon: 'message-circle', xpReward: 75, trigger: 'comment', category: 'social', rarity: 'rare', condition: { count: 25, field: 'comments' } },
+  { code: 'social_butterfly', name: '网格节点', description: '获得 10 位关注者', icon: 'users', xpReward: 50, trigger: 'follow', category: 'social', rarity: 'rare', condition: { count: 10, field: 'followers' } },
+  { code: 'night_owl', name: '午夜编译', description: '在 0 点到 5 点之间发布文章', icon: 'moon', xpReward: 15, trigger: 'publish_article', category: 'writing', rarity: 'secret', hidden: true, condition: { nightOwl: true } },
+  { code: 'bookworm', name: '资料爬虫', description: '读完 50 篇文章', icon: 'book', xpReward: 100, trigger: 'read_article', category: 'reading', rarity: 'rare', condition: { count: 50, field: 'reads' } },
+  { code: 'collector', name: '档案收藏家', description: '收藏 20 篇文章', icon: 'bookmark', xpReward: 50, trigger: 'bookmark', category: 'collection', rarity: 'rare', condition: { count: 20, field: 'bookmarks' } },
+  { code: 'streak_7', name: '连续在线：一周', description: '保持 7 天连续活跃', icon: 'zap', xpReward: 50, trigger: 'streak', category: 'streak', rarity: 'rare', condition: { streak: 7 } },
+  { code: 'streak_30', name: '连续在线：一月', description: '保持 30 天连续活跃', icon: 'award', xpReward: 200, trigger: 'streak', category: 'streak', rarity: 'epic', condition: { streak: 30 } },
+  { code: 'code_master', name: '代码炼成', description: '发布 5 篇包含代码块的文章', icon: 'code', xpReward: 75, trigger: 'publish_article', category: 'writing', rarity: 'rare', condition: { count: 5, field: 'code_articles' } },
+  { code: 'tag_master', name: '标签架构师', description: '在文章中使用 10 个不同标签', icon: 'hash', xpReward: 75, trigger: 'publish_article', category: 'writing', rarity: 'rare', condition: { count: 10, field: 'unique_tags' } },
+];
+
+const ACHIEVEMENT_META = new Map(ACHIEVEMENTS.map(a => [a.code, a]));
+
+function getAchievementImage(code) {
+  return `/achievement-badges/${code}.png`;
+}
+
 function getLevel(xp) {
   let lvl = LEVELS[0];
   for (const l of LEVELS) {
@@ -39,6 +61,82 @@ function getLevel(xp) {
 function getNextLevelXp(currentLevel) {
   const next = LEVELS.find(l => l.level === currentLevel + 1);
   return next ? next.xp : null;
+}
+
+async function getAchievementProgress(userId, achievement) {
+  const condition = achievement.condition || {};
+
+  if (condition.nightOwl) {
+    return { current: 0, target: 1, percent: 0, label: 'Hidden trigger' };
+  }
+
+  if (condition.streak) {
+    const row = await dbGet('SELECT max_streak FROM users WHERE id = ?', [userId]);
+    const current = row?.max_streak || 0;
+    const target = condition.streak;
+    return {
+      current,
+      target,
+      percent: Math.min(100, Math.round((current / target) * 100)),
+      label: `${current}/${target} days`,
+    };
+  }
+
+  if (!condition.field || !condition.count) {
+    return { current: 0, target: 0, percent: 0, label: '' };
+  }
+
+  let current = 0;
+  switch (condition.field) {
+    case 'articles':
+      current = (await dbGet('SELECT COUNT(*) as c FROM articles WHERE user_id = ?', [userId]))?.c || 0;
+      break;
+    case 'likes':
+      current = (await dbGet(
+        'SELECT COUNT(*) as c FROM likes WHERE article_id IN (SELECT id FROM articles WHERE user_id = ?)',
+        [userId]
+      ))?.c || 0;
+      break;
+    case 'comments':
+      current = (await dbGet('SELECT COUNT(*) as c FROM comments WHERE user_id = ?', [userId]))?.c || 0;
+      break;
+    case 'followers':
+      current = (await dbGet('SELECT COUNT(*) as c FROM follows WHERE following_id = ?', [userId]))?.c || 0;
+      break;
+    case 'bookmarks':
+      current = (await dbGet('SELECT COUNT(*) as c FROM bookmarks WHERE user_id = ?', [userId]))?.c || 0;
+      break;
+    case 'reads':
+      current = (await dbGet(
+        'SELECT COUNT(*) as c FROM reading_progress WHERE user_id = ? AND scroll_percentage >= 90',
+        [userId]
+      ))?.c || 0;
+      break;
+    case 'unique_tags':
+      current = (await dbGet(
+        `SELECT COUNT(DISTINCT t.id) as c FROM tags t
+         JOIN article_tags at ON t.id = at.tag_id
+         JOIN articles a ON at.article_id = a.id
+         WHERE a.user_id = ?`,
+        [userId]
+      ))?.c || 0;
+      break;
+    case 'code_articles':
+      current = (await dbGet(
+        `SELECT COUNT(*) as c FROM articles
+         WHERE user_id = ? AND content LIKE '%\`\`\`%'`,
+        [userId]
+      ))?.c || 0;
+      break;
+  }
+
+  const target = condition.count;
+  return {
+    current,
+    target,
+    percent: Math.min(100, Math.round((current / target) * 100)),
+    label: `${current}/${target}`,
+  };
 }
 
 // ====== Internal: Grant XP ======
@@ -134,7 +232,9 @@ async function checkStreak(userId) {
       await grantXP(userId, bonusXp, 'daily_streak_bonus', 'streak', streak);
     }
 
-    return { streak, bonus: bonusXp, maxStreak };
+    const achievements = await checkAchievements(userId, 'streak', { streak });
+
+    return { streak, bonus: bonusXp, maxStreak, achievements };
   } catch (err) {
     console.error('[GAMIFICATION] checkStreak error:', err.message);
     return { streak: 0, bonus: 0 };
@@ -142,22 +242,6 @@ async function checkStreak(userId) {
 }
 
 // ====== Internal: Check Achievements ======
-const ACHIEVEMENTS = [
-  { code: 'first_article', name: 'First Dispatch', description: 'Publish your first article', icon: 'zap', xpReward: 25, trigger: 'publish_article', condition: { count: 1, field: 'articles' } },
-  { code: 'prolific_writer', name: 'Data Stream', description: 'Publish 10 articles', icon: 'layers', xpReward: 100, trigger: 'publish_article', condition: { count: 10, field: 'articles' } },
-  { code: 'first_like_received', name: 'Signal Detected', description: 'Receive your first like', icon: 'heart', xpReward: 10, trigger: 'like_received', condition: { count: 1, field: 'likes' } },
-  { code: 'popular', name: 'Going Viral', description: 'Receive 100 total likes', icon: 'flame', xpReward: 200, trigger: 'like_received', condition: { count: 100, field: 'likes' } },
-  { code: 'commentator', name: 'Packet Sent', description: 'Write 25 comments', icon: 'message-circle', xpReward: 75, trigger: 'comment', condition: { count: 25, field: 'comments' } },
-  { code: 'social_butterfly', name: 'Mesh Network', description: 'Get 10 followers', icon: 'users', xpReward: 50, trigger: 'follow', condition: { count: 10, field: 'followers' } },
-  { code: 'night_owl', name: 'After Dark', description: 'Publish an article between 12am-5am', icon: 'moon', xpReward: 15, trigger: 'publish_article', condition: { nightOwl: true } },
-  { code: 'bookworm', name: 'Data Crawler', description: 'Read 50 articles', icon: 'book', xpReward: 100, trigger: 'read_article', condition: { count: 50, field: 'reads' } },
-  { code: 'collector', name: 'Archive Access', description: 'Bookmark 20 articles', icon: 'bookmark', xpReward: 50, trigger: 'bookmark', condition: { count: 20, field: 'bookmarks' } },
-  { code: 'streak_7', name: 'Uptime: 1 Week', description: 'Maintain a 7-day streak', icon: 'zap', xpReward: 50, trigger: 'streak', condition: { streak: 7 } },
-  { code: 'streak_30', name: 'Uptime: 1 Month', description: 'Maintain a 30-day streak', icon: 'award', xpReward: 200, trigger: 'streak', condition: { streak: 30 } },
-  { code: 'code_master', name: 'Assembly Required', description: 'Publish 5 articles with code blocks', icon: 'code', xpReward: 75, trigger: 'publish_article', condition: { count: 5, field: 'code_articles' } },
-  { code: 'tag_master', name: 'Taxonomy Expert', description: 'Create articles with 10 different tags', icon: 'hash', xpReward: 75, trigger: 'publish_article', condition: { count: 10, field: 'unique_tags' } },
-];
-
 async function checkAchievements(userId, triggerEvent, context = {}) {
   try {
     const relevantAchievements = ACHIEVEMENTS.filter(a => a.trigger === triggerEvent);
@@ -209,6 +293,13 @@ async function checkAchievements(userId, triggerEvent, context = {}) {
             const r5 = await dbGet('SELECT COUNT(*) as c FROM bookmarks WHERE user_id = ?', [userId]);
             actualCount = r5.c;
             break;
+          case 'reads':
+            const r8 = await dbGet(
+              'SELECT COUNT(*) as c FROM reading_progress WHERE user_id = ? AND scroll_percentage >= 90',
+              [userId]
+            );
+            actualCount = r8.c;
+            break;
           case 'unique_tags':
             const r6 = await dbGet(
               `SELECT COUNT(DISTINCT t.id) as c FROM tags t
@@ -244,7 +335,16 @@ async function checkAchievements(userId, triggerEvent, context = {}) {
           type: 'system',
           message: `ACHIEVEMENT: ${ach.name} — ${ach.description}`,
         });
-        newAchievements.push({ code: ach.code, name: ach.name, xpReward: ach.xpReward });
+        newAchievements.push({
+          code: ach.code,
+          name: ach.name,
+          description: ach.description,
+          icon: ach.icon,
+          image: getAchievementImage(ach.code),
+          xpReward: ach.xpReward,
+          category: ach.category,
+          rarity: ach.rarity,
+        });
       }
     }
 
@@ -327,10 +427,10 @@ router.get('/xp-history', authenticateToken, async (req, res) => {
     const limit = 30;
     const offset = (page - 1) * limit;
 
-    const [{ total }] = await [dbGet(
+    const { total } = await dbGet(
       'SELECT COUNT(*) as total FROM xp_transactions WHERE user_id = ?',
       [req.user.id]
-    )];
+    );
 
     const history = await dbAll(
       `SELECT * FROM xp_transactions WHERE user_id = ?
@@ -380,10 +480,29 @@ router.get('/achievements', authenticateToken, async (req, res) => {
     );
     const userAchSet = new Set(userAch.map(u => u.id));
 
-    const result = allAch.map(a => ({
-      ...a,
-      unlocked: userAchSet.has(a.id),
-      unlockedAt: userAch.find(u => u.id === a.id)?.unlocked_at || null,
+    const result = await Promise.all(allAch.map(async (a) => {
+      const meta = ACHIEVEMENT_META.get(a.code) || {};
+      const condition = meta.condition || JSON.parse(a.condition_json || '{}');
+      const unlocked = userAchSet.has(a.id);
+      const progress = await getAchievementProgress(req.user.id, { ...a, ...meta, condition });
+
+      return {
+        ...a,
+        name: meta.name || a.name,
+        description: meta.description || a.description,
+        icon: meta.icon || a.icon,
+        xp_reward: meta.xpReward ?? a.xp_reward,
+        xpReward: meta.xpReward ?? a.xp_reward,
+        category: meta.category || 'general',
+        rarity: meta.rarity || 'common',
+        hidden: !!meta.hidden,
+        image: getAchievementImage(a.code),
+        unlocked,
+        unlockedAt: userAch.find(u => u.id === a.id)?.unlocked_at || null,
+        progress: unlocked
+          ? { ...progress, percent: 100, current: progress.target || progress.current }
+          : progress,
+      };
     }));
 
     res.json({ achievements: result });
@@ -480,3 +599,4 @@ module.exports.checkStreak = checkStreak;
 module.exports.checkAchievements = checkAchievements;
 module.exports.addActivity = addActivity;
 module.exports.ACHIEVEMENTS = ACHIEVEMENTS;
+module.exports.getAchievementProgress = getAchievementProgress;

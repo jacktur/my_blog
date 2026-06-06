@@ -3,6 +3,10 @@ require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is not configured. Copy backend/.env.example to backend/.env and set JWT_SECRET.');
+}
+
 /**
  * JWT 认证中间件
  * 验证请求头中的 Authorization: Bearer <token>
@@ -17,7 +21,7 @@ function authenticateToken(req, res, next) {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ error: '令牌无效或已过期' });
+      return res.status(401).json({ error: '令牌无效或已过期' });
     }
     // 将解码后的用户信息挂载到 req 上供后续路由使用
     req.user = user;

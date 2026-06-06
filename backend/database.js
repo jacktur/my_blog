@@ -490,19 +490,19 @@ const createSeriesArticlesTable = `
 
 // ===== 成就种子数据 =====
 const SEED_ACHIEVEMENTS = [
-  ['first_article', 'First Dispatch', 'Publish your first article', 'zap', 25, 'publish_article', '{"count":1,"field":"articles"}'],
-  ['prolific_writer', 'Data Stream', 'Publish 10 articles', 'layers', 100, 'publish_article', '{"count":10,"field":"articles"}'],
-  ['first_like_received', 'Signal Detected', 'Receive your first like', 'heart', 10, 'like_received', '{"count":1,"field":"likes"}'],
-  ['popular', 'Going Viral', 'Receive 100 total likes', 'flame', 200, 'like_received', '{"count":100,"field":"likes"}'],
-  ['commentator', 'Packet Sent', 'Write 25 comments', 'message-circle', 75, 'comment', '{"count":25,"field":"comments"}'],
-  ['social_butterfly', 'Mesh Network', 'Get 10 followers', 'users', 50, 'follow', '{"count":10,"field":"followers"}'],
-  ['night_owl', 'After Dark', 'Publish an article between 12am-5am', 'moon', 15, 'publish_article', '{"nightOwl":true}'],
-  ['bookworm', 'Data Crawler', 'Read 50 articles', 'book', 100, 'read_article', '{"count":50,"field":"reads"}'],
-  ['collector', 'Archive Access', 'Bookmark 20 articles', 'bookmark', 50, 'bookmark', '{"count":20,"field":"bookmarks"}'],
-  ['streak_7', 'Uptime: 1 Week', 'Maintain a 7-day streak', 'zap', 50, 'streak', '{"streak":7}'],
-  ['streak_30', 'Uptime: 1 Month', 'Maintain a 30-day streak', 'award', 200, 'streak', '{"streak":30}'],
-  ['code_master', 'Assembly Required', 'Publish 5 articles with code blocks', 'code', 75, 'publish_article', '{"count":5,"field":"code_articles"}'],
-  ['tag_master', 'Taxonomy Expert', 'Create articles with 10 different tags', 'hash', 75, 'publish_article', '{"count":10,"field":"unique_tags"}'],
+  ['first_article', '首篇派送', '发布你的第一篇文章', 'zap', 25, 'publish_article', '{"count":1,"field":"articles"}'],
+  ['prolific_writer', '数据洪流', '累计发布 10 篇文章', 'layers', 100, 'publish_article', '{"count":10,"field":"articles"}'],
+  ['first_like_received', '信号捕获', '首次收到他人的点赞', 'heart', 10, 'like_received', '{"count":1,"field":"likes"}'],
+  ['popular', '热度爆发', '累计收到 100 个点赞', 'flame', 200, 'like_received', '{"count":100,"field":"likes"}'],
+  ['commentator', '数据包发送者', '累计发表 25 条评论', 'message-circle', 75, 'comment', '{"count":25,"field":"comments"}'],
+  ['social_butterfly', '网格节点', '获得 10 位关注者', 'users', 50, 'follow', '{"count":10,"field":"followers"}'],
+  ['night_owl', '午夜编译', '在 0 点到 5 点之间发布文章', 'moon', 15, 'publish_article', '{"nightOwl":true}'],
+  ['bookworm', '资料爬虫', '读完 50 篇文章', 'book', 100, 'read_article', '{"count":50,"field":"reads"}'],
+  ['collector', '档案收藏家', '收藏 20 篇文章', 'bookmark', 50, 'bookmark', '{"count":20,"field":"bookmarks"}'],
+  ['streak_7', '连续在线：一周', '保持 7 天连续活跃', 'zap', 50, 'streak', '{"streak":7}'],
+  ['streak_30', '连续在线：一月', '保持 30 天连续活跃', 'award', 200, 'streak', '{"streak":30}'],
+  ['code_master', '代码炼成', '发布 5 篇包含代码块的文章', 'code', 75, 'publish_article', '{"count":5,"field":"code_articles"}'],
+  ['tag_master', '标签架构师', '在文章中使用 10 个不同标签', 'hash', 75, 'publish_article', '{"count":10,"field":"unique_tags"}'],
 ];
 
 function seedAchievements() {

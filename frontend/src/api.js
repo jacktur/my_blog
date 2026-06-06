@@ -18,10 +18,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const isAuthError =
+      err.response?.status === 401 ||
+      (err.response?.status === 403 && err.response?.data?.error?.includes('令牌'));
+
+    if (isAuthError) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(err);
   }

@@ -3,9 +3,11 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getCommentsApi, createCommentApi, deleteCommentApi, getLikeCountApi, checkLikeStatusApi, likeArticleApi } from '../api';
 import { MessageSquare, ThumbsUp, Send, Trash2 } from 'lucide-react';
+import { useXpNotification } from './XPNotification';
 
 export default function CommentSection({ articleId }) {
   const { user } = useAuth();
+  const { notifyGamification } = useXpNotification();
   const [comments, setComments] = useState([]);
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
@@ -40,6 +42,7 @@ export default function CommentSection({ articleId }) {
       const r = await createCommentApi(articleId, trimmed);
       setComments((prev) => [...prev, r.data.comment]);
       setCommentText('');
+      notifyGamification(r.data.gamification);
     } catch (err) { alert(err.response?.data?.error || '评论失败'); }
     finally { setSubmitting(false); }
   };
@@ -58,6 +61,7 @@ export default function CommentSection({ articleId }) {
       const r = await likeArticleApi(articleId);
       setLikeCount(r.data.likes);
       setRemainingLikes(r.data.remainingLikes);
+      notifyGamification(r.data.gamification?.self);
     } catch {} finally { setLiking(false); }
   };
 

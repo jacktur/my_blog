@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { Bookmark } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { checkBookmarkApi, addBookmarkApi, removeBookmarkApi } from '../api';
+import { useXpNotification } from './XPNotification';
 
 export default function BookmarkButton({ articleId }) {
   const { user } = useAuth();
+  const { notifyGamification } = useXpNotification();
   const [bookmarked, setBookmarked] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -18,7 +20,11 @@ export default function BookmarkButton({ articleId }) {
     setLoading(true);
     try {
       if (bookmarked) { await removeBookmarkApi(articleId); setBookmarked(false); }
-      else { await addBookmarkApi(articleId); setBookmarked(true); }
+      else {
+        const res = await addBookmarkApi(articleId);
+        setBookmarked(true);
+        notifyGamification(res.data.gamification);
+      }
     } catch {}
     finally { setLoading(false); }
   };
