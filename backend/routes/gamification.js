@@ -323,9 +323,10 @@ async function checkAchievements(userId, triggerEvent, context = {}) {
       }
 
       if (earned) {
+        const unlockedAt = new Date().toISOString();
         await dbRun(
-          'INSERT INTO user_achievements (user_id, achievement_id) VALUES (?, ?)',
-          [userId, dbAch.id]
+          'INSERT INTO user_achievements (user_id, achievement_id, unlocked_at) VALUES (?, ?, ?)',
+          [userId, dbAch.id, unlockedAt]
         );
         if (ach.xpReward > 0) {
           await grantXP(userId, ach.xpReward, `achievement:${ach.code}`, 'achievement', dbAch.id);
@@ -344,6 +345,7 @@ async function checkAchievements(userId, triggerEvent, context = {}) {
           xpReward: ach.xpReward,
           category: ach.category,
           rarity: ach.rarity,
+          unlockedAt,
         });
       }
     }

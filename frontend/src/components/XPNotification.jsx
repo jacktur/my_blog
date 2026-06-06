@@ -1,10 +1,13 @@
-import { useState, createContext, useContext, useCallback } from 'react';
+import { useState, createContext, useContext, useCallback, useRef } from 'react';
 import { Award, Zap } from 'lucide-react';
+import AchievementUnlockModal from './AchievementUnlockModal';
 
 const XpNotificationContext = createContext(null);
 
 export function XpNotificationProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const [achievementQueue, setAchievementQueue] = useState([]);
+  const shownAchievementKeysRef = useRef(new Set());
 
   const pushToast = useCallback((toast) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -20,6 +23,16 @@ export function XpNotificationProvider({ children }) {
   const addAchievementToast = useCallback((achievement) => {
     if (!achievement) return;
     pushToast({ type: 'achievement', achievement });
+    const achievementKey = achievement.code || achievement.id || achievement.name;
+    if (!achievementKey || shownAchievementKeysRef.current.has(achievementKey)) return;
+    shownAchievementKeysRef.current.add(achievementKey);
+    setAchievementQueue(prev => [
+      ...prev,
+      {
+        ...achievement,
+        unlockedAt: achievement.unlockedAt || achievement.unlocked_at || new Date().toISOString(),
+      },
+    ]);
   }, [pushToast]);
 
   const notifyGamification = useCallback((payload) => {
@@ -33,6 +46,10 @@ export function XpNotificationProvider({ children }) {
   return (
     <XpNotificationContext.Provider value={{ addXpToast, addAchievementToast, notifyGamification }}>
       {children}
+      <AchievementUnlockModal
+        achievement={achievementQueue[0] || null}
+        onClose={() => setAchievementQueue(prev => prev.slice(1))}
+      />
       <div className="fixed bottom-16 right-4 z-50 space-y-2">
         {toasts.map(toast => (
           toast.type === 'achievement' ? (
