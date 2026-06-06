@@ -279,15 +279,15 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const articleTags = await getArticleTags(result.lastID);
 
+    const xp = await grantXP(userId, 50, 'publish_article', 'article', result.lastID);
+    await addActivity(userId, 'publish_article', '发布了文章「' + safeTitle + '」', 'article', result.lastID, { title: safeTitle });
+    const achievements = await checkAchievements(userId, 'publish_article', { hour: new Date().getHours() });
+
     res.status(201).json({
       message: '文章创建成功',
-      article: { id: result.lastID, title: safeTitle, user_id: userId, tags: articleTags }
+      article: { id: result.lastID, title: safeTitle, user_id: userId, tags: articleTags },
+      gamification: { xp, achievements }
     });
-
-    // Fire-and-forget: XP + achievements + activity
-    grantXP(userId, 50, 'publish_article', 'article', result.lastID);
-    addActivity(userId, 'publish_article', '发布了文章「' + safeTitle + '」', 'article', result.lastID, { title: safeTitle });
-    checkAchievements(userId, 'publish_article', { hour: new Date().getHours() });
   } catch (err) {
     console.error('[ARTICLES] 创建错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });

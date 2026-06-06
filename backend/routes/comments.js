@@ -100,11 +100,11 @@ router.post('/comments', authenticateToken, async (req, res) => {
       });
     }
 
-    // XP + activity for commenting
-    grantXP(userId, 10, 'comment', 'article', id);
-    addActivity(userId, 'comment', '评论了文章 #' + id, 'article', id);
+    const xp = await grantXP(userId, 10, 'comment', 'article', id);
+    await addActivity(userId, 'comment', '评论了文章 #' + id, 'article', id);
+    const achievements = await checkAchievements(userId, 'comment');
 
-    res.status(201).json({ message: '评论发表成功', comment: newComment });
+    res.status(201).json({ message: '评论发表成功', comment: newComment, gamification: { xp, achievements } });
   } catch (err) {
     console.error('[COMMENTS] 发表评论错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });
@@ -222,7 +222,7 @@ router.post('/like', authenticateToken, async (req, res) => {
     }
 
     // 插入点赞记录
-    await dbRun(
+    const likeResult = await dbRun(
       'INSERT INTO likes (user_id, article_id) VALUES (?, ?)',
       [userId, id]
     );
@@ -239,9 +239,12 @@ router.post('/like', authenticateToken, async (req, res) => {
     }
 
     // XP for author receiving like
+    let authorGamification = null;
     if (article.user_id !== userId) {
-      grantXP(article.user_id, 5, 'like_received', 'article', id);
-      addActivity(article.user_id, 'like_received', '文章获得了来自 ' + req.user.username + ' 的点赞', 'article', id);
+      const xp = await grantXP(article.user_id, 5, 'like_received', 'like', likeResult.lastID);
+      await addActivity(article.user_id, 'like_received', '文章获得了来自 ' + req.user.username + ' 的点赞', 'article', id);
+      const achievements = await checkAchievements(article.user_id, 'like_received');
+      authorGamification = { xp, achievements };
     }
 
     // 返回最新的总点赞数
@@ -253,7 +256,8 @@ router.post('/like', authenticateToken, async (req, res) => {
     res.status(201).json({
       message: '点赞成功',
       likes: totalLikes.count,
-      remainingLikes: Math.max(0, 5 - (recentLikes.count + 1))
+      remainingLikes: Math.max(0, 5 - (recentLikes.count + 1)),
+      gamification: { author: authorGamification }
     });
   } catch (err) {
     console.error('[LIKES] 点赞错误:', err.message);
