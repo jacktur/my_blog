@@ -120,7 +120,7 @@ router.get('/:id/messages', authenticateToken, async (req, res) => {
 
     const messages = await dbAll(`
       SELECT m.id, m.sender_id, m.content, m.created_at,
-             u.username as sender_username, u.avatar as sender_avatar
+             u.username as sender_username, u.nickname as sender_nickname, u.avatar as sender_avatar
       FROM messages m
       JOIN users u ON u.id = m.sender_id
       WHERE m.conversation_id = ?
@@ -190,7 +190,7 @@ router.post('/:id/messages', authenticateToken, async (req, res) => {
 
     const message = await dbGet(
       `SELECT m.id, m.sender_id, m.content, m.created_at,
-              u.username as sender_username, u.avatar as sender_avatar
+              u.username as sender_username, u.nickname as sender_nickname, u.avatar as sender_avatar
        FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?`,
       [result.lastID]
     );

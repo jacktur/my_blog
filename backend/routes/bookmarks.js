@@ -24,7 +24,7 @@ router.get('/', authenticateToken, async (req, res) => {
               articles.id, articles.title,
               substr(articles.content, 1, 200) as excerpt,
               articles.created_at, articles.user_id, articles.read_time,
-              users.username,
+              users.username, users.nickname,
               (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM bookmarks

@@ -76,6 +76,7 @@ export const likeArticleApi = (articleId) => api.post(`/articles/${articleId}/li
 
 // ====== Users API ======
 export const getUserProfileApi = (id) => api.get(`/users/${id}`);
+export const getCurrentUserProfileApi = () => api.get('/users/profile');
 export const getUserArticlesApi = (id) => api.get(`/users/${id}/articles`);
 export const getUserStatsApi = (id) => api.get(`/users/${id}/stats`);
 export const updateProfileApi = (data) => api.put('/users/profile', data);

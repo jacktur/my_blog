@@ -452,7 +452,7 @@ router.get('/xp-history', authenticateToken, async (req, res) => {
 router.get('/leaderboard', async (req, res) => {
   try {
     const leaders = await dbAll(
-      `SELECT id, username, xp, level, avatar, current_streak
+      `SELECT id, username, nickname, xp, level, avatar, current_streak
        FROM users
        ORDER BY xp DESC, level DESC
        LIMIT 100`

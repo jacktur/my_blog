@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { getCommentsApi, createCommentApi, deleteCommentApi, getLikeCountApi, checkLikeStatusApi, likeArticleApi } from '../api';
 import { MessageSquare, ThumbsUp, Send, Trash2 } from 'lucide-react';
 import { useXpNotification } from './XPNotification';
+import { getDisplayInitial, getDisplayName } from '../utils/displayName';
 
 export default function CommentSection({ articleId }) {
   const { user } = useAuth();
@@ -103,9 +104,9 @@ export default function CommentSection({ articleId }) {
               <div className="flex items-center justify-between mb-1.5">
                 <Link to={`/profile/${c.user_id}`} className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-app-bg flex items-center justify-center text-app-subtext text-[10px] font-bold">
-                    {c.username?.charAt(0).toUpperCase()}
+                    {getDisplayInitial(c)}
                   </div>
-                  <span className="text-xs font-medium text-app-text">{c.username}</span>
+                  <span className="text-xs font-medium text-app-text">{getDisplayName(c)}</span>
                   <span className="text-[10px] text-app-subtext">{formatDate(c.created_at)}</span>
                 </Link>
                 {user && user.id === c.user_id && (

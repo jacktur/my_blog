@@ -29,7 +29,7 @@ router.get('/comments', async (req, res) => {
 
     const comments = await dbAll(
       `SELECT comments.id, comments.content, comments.created_at,
-              users.id as user_id, users.username
+              users.id as user_id, users.username, users.nickname
        FROM comments
        JOIN users ON comments.user_id = users.id
        WHERE comments.article_id = ?
@@ -78,7 +78,7 @@ router.post('/comments', authenticateToken, async (req, res) => {
     // 返回新创建的评论（包含用户名）
     const newComment = await dbGet(
       `SELECT comments.id, comments.content, comments.created_at,
-              users.id as user_id, users.username
+              users.id as user_id, users.username, users.nickname
        FROM comments
        JOIN users ON comments.user_id = users.id
        WHERE comments.id = ?`,
@@ -87,13 +87,15 @@ router.post('/comments', authenticateToken, async (req, res) => {
 
     // 通知文章作者
     if (article.user_id !== userId) {
+      const commenter = await dbGet('SELECT username, nickname FROM users WHERE id = ?', [userId]);
+      const commenterName = commenter?.nickname || commenter?.username || req.user.username;
       const commentPreview = safeContent.length > 50
         ? safeContent.slice(0, 50) + '...'
         : safeContent;
       await createNotification({
         userId: article.user_id,
         type: 'comment',
-        message: `${req.user.username} 评论了你的文章`,
+        message: `${commenterName} 评论了你的文章`,
         relatedUserId: userId,
         articleId: id,
         commentPreview
@@ -227,12 +229,17 @@ router.post('/like', authenticateToken, async (req, res) => {
       [userId, id]
     );
 
+    const liker = article.user_id !== userId
+      ? await dbGet('SELECT username, nickname FROM users WHERE id = ?', [userId])
+      : null;
+    const likerName = liker?.nickname || liker?.username || req.user.username;
+
     // 通知文章作者
     if (article.user_id !== userId) {
       await createNotification({
         userId: article.user_id,
         type: 'like',
-        message: `${req.user.username} 赞了你的文章`,
+        message: `${likerName} 赞了你的文章`,
         relatedUserId: userId,
         articleId: id
       });
@@ -242,7 +249,7 @@ router.post('/like', authenticateToken, async (req, res) => {
     let authorGamification = null;
     if (article.user_id !== userId) {
       const xp = await grantXP(article.user_id, 5, 'like_received', 'like', likeResult.lastID);
-      await addActivity(article.user_id, 'like_received', '文章获得了来自 ' + req.user.username + ' 的点赞', 'article', id);
+      await addActivity(article.user_id, 'like_received', '文章获得了来自 ' + likerName + ' 的点赞', 'article', id);
       const achievements = await checkAchievements(article.user_id, 'like_received');
       authorGamification = { xp, achievements };
     }

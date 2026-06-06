@@ -1,4 +1,5 @@
 import { LogOut } from 'lucide-react';
+import { getDisplayName } from '../../utils/displayName';
 
 export default function UserCard({ user, onLogout }) {
   const getAvatarUrl = (avatar) => {
@@ -18,7 +19,7 @@ export default function UserCard({ user, onLogout }) {
             onError={(e) => { e.target.src = '/uploads/avatars/defaults/default-1.svg'; }}
           />
         </div>
-        <span className="text-sm font-semibold text-white">{user?.username}</span>
+        <span className="text-sm font-semibold text-white">{getDisplayName(user)}</span>
       </div>
       <button
         onClick={onLogout}

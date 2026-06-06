@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { updateProfileApi, getUserProfileApi } from '../api';
+import { updateProfileApi, getCurrentUserProfileApi } from '../api';
 import AvatarPicker from '../components/AvatarPicker';
 import { ArrowLeft } from 'lucide-react';
 
@@ -20,9 +20,9 @@ export default function Settings() {
 
   useEffect(() => {
     if (authUser?.id) {
-      getUserProfileApi(authUser.id).then((res) => {
+      getCurrentUserProfileApi().then((res) => {
         const p = res.data.user;
-        setNickname(p.nickname || ''); setEmail(p.email || ''); setBirthday(p.birthday || '');
+        setNickname(p.nickname || p.username || ''); setEmail(p.email || ''); setBirthday((p.birthday || '').slice(0, 10));
         setBio(p.bio || ''); setAvatar(p.avatar || 'default-1');
       }).catch(() => {}).finally(() => setFetching(false));
     } else setFetching(false);
@@ -38,8 +38,13 @@ export default function Settings() {
     if (bio && bio.length > 200) return setError('签名不能超过200个字符');
     setLoading(true);
     try {
-      const payload = {}; if (nickname) payload.nickname = nickname; if (email) payload.email = email;
-      if (birthday) payload.birthday = birthday; if (bio) payload.bio = bio; if (avatar) payload.avatar = avatar;
+      const payload = {
+        nickname,
+        email,
+        birthday,
+        bio,
+        avatar: avatar || 'default-1',
+      };
       const res = await updateProfileApi(payload);
       if (res.data.user) updateUser({ ...res.data.user, id: authUser.id });
       else updateUser({ ...authUser, nickname: nickname || authUser.username, avatar: avatar || 'default-1' });

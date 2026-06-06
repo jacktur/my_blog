@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Search, PlusCircle, Sun } from 'lucide-react';
 import NotificationDropdown from './NotificationDropdown';
+import { getDisplayName } from '../utils/displayName';
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuth();
@@ -97,7 +98,8 @@ export default function Navbar() {
                     <div className="absolute right-0 top-full mt-2 w-48 rounded-2xl bg-white shadow-lg border border-app-border
                       overflow-hidden z-50">
                       <div className="px-4 py-3 border-b border-app-border">
-                        <p className="text-sm font-semibold text-app-text">{user?.username}</p>
+                        <p className="text-sm font-semibold text-app-text">{getDisplayName(user)}</p>
+                        <p className="text-xs text-app-subtext">@{user?.username}</p>
                       </div>
                       <Link to={`/profile/${user?.id}`} onClick={() => setMenuOpen(false)}
                         className="block px-4 py-2.5 text-sm text-app-text hover:bg-app-bg transition-colors">

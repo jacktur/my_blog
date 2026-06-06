@@ -34,7 +34,7 @@ export default function AvatarPicker({ currentAvatar, onAvatarChange }) {
         <p className="text-xs text-app-subtext mb-2">选择默认头像</p>
         <div className="grid grid-cols-4 gap-2">
           {defaultAvatars.map(av => (
-            <button key={av.id} onClick={() => handleDefaultSelect(av.id)}
+            <button key={av.id} type="button" onClick={() => handleDefaultSelect(av.id)}
               className={`relative w-full aspect-square rounded-md overflow-hidden ring-2 transition-all ${selected === av.id ? 'ring-app-blue shadow-sm' : 'ring-app-border hover:ring-app-blue/50'}`}>
               <img src={av.url} alt={av.label} className="w-full h-full object-cover" />
               {selected === av.id && <div className="absolute inset-0 bg-app-blue/20 flex items-center justify-center"><Check size={14} className="text-white" /></div>}

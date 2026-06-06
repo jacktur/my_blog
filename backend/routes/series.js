@@ -10,7 +10,7 @@ const { authenticateToken } = require('../middleware/auth');
 router.get('/', async (req, res) => {
   try {
     const series = await dbAll(
-      `SELECT s.id, s.title, s.description, s.cover_image, s.user_id, u.username,
+      `SELECT s.id, s.title, s.description, s.cover_image, s.user_id, u.username, u.nickname,
               s.created_at,
               (SELECT COUNT(*) FROM series_articles WHERE series_id = s.id) as article_count
        FROM series s
@@ -32,7 +32,7 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const series = await dbGet(
-      `SELECT s.*, u.username FROM series s
+      `SELECT s.*, u.username, u.nickname FROM series s
        JOIN users u ON s.user_id = u.id
        WHERE s.id = ?`,
       [id]

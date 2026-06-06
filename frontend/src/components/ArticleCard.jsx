@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { MessageSquare, ThumbsUp, Bookmark, Eye, Repeat2 } from 'lucide-react';
 import BookmarkButton from './BookmarkButton';
+import { getDisplayInitial, getDisplayName } from '../utils/displayName';
 
 export default function ArticleCard({ article }) {
   const formatDate = (dateStr) => {
@@ -17,10 +18,10 @@ export default function ArticleCard({ article }) {
       {/* Author row */}
       <div className="flex items-center gap-2.5 mb-3">
         <div className="w-8 h-8 rounded-full bg-app-bg flex items-center justify-center text-app-subtext text-xs font-bold">
-          {article.username?.charAt(0).toUpperCase() || 'U'}
+          {getDisplayInitial(article)}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-app-text truncate">{article.username}</p>
+          <p className="text-sm font-medium text-app-text truncate">{getDisplayName(article)}</p>
           <p className="text-xs text-app-subtext">{formatDate(article.created_at)}</p>
         </div>
         {article.read_time > 0 && (

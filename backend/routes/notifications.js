@@ -20,6 +20,7 @@ router.get('/', authenticateToken, async (req, res) => {
       SELECT n.id, n.type, n.message, n.is_read, n.created_at,
              n.article_id, n.comment_preview,
              u.id as related_user_id, u.username as related_username,
+             u.nickname as related_nickname,
              u.avatar as related_avatar
       FROM notifications n
       LEFT JOIN users u ON n.related_user_id = u.id

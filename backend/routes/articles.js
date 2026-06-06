@@ -92,7 +92,7 @@ router.get('/', (req, res, next) => {
               substr(articles.content, 1, 200) as excerpt,
               articles.created_at, articles.read_time, articles.cover_image,
               articles.user_id,
-              users.username,
+              users.username, users.nickname,
               (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
@@ -107,7 +107,7 @@ router.get('/', (req, res, next) => {
               substr(articles.content, 1, 200) as excerpt,
               articles.created_at, articles.read_time, articles.cover_image,
               articles.user_id,
-              users.username,
+              users.username, users.nickname,
               (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
@@ -122,7 +122,7 @@ router.get('/', (req, res, next) => {
               substr(articles.content, 1, 200) as excerpt,
               articles.created_at, articles.read_time, articles.cover_image,
               articles.user_id,
-              users.username,
+              users.username, users.nickname,
               (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
@@ -167,7 +167,7 @@ router.get('/search', async (req, res) => {
               substr(articles.content, 1, 200) as excerpt,
               articles.created_at, articles.read_time, articles.cover_image,
               articles.user_id,
-              users.username,
+              users.username, users.nickname,
               (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
@@ -203,7 +203,7 @@ router.get('/:id', async (req, res) => {
     const article = await dbGet(
       `SELECT articles.id, articles.title, articles.content,
               articles.created_at, articles.read_time, articles.cover_image, articles.view_count,
-              articles.user_id, users.username
+              articles.user_id, users.username, users.nickname
        FROM articles
        JOIN users ON articles.user_id = users.id
        WHERE articles.id = ?`,

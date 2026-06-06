@@ -11,6 +11,7 @@ import TableOfContents from '../components/TableOfContents';
 import BookmarkButton from '../components/BookmarkButton';
 import EnhancedCodeBlock from '../components/EnhancedCodeBlock';
 import { splitHtmlAtCodeBlocks } from '../utils/codeBlockEnhancer';
+import { getDisplayInitial, getDisplayName } from '../utils/displayName';
 
 export default function ArticleDetail() {
   const { id } = useParams();
@@ -125,10 +126,10 @@ export default function ArticleDetail() {
         <div className="flex items-center gap-3 mb-6 pb-6 border-b border-app-border">
           <Link to={`/profile/${article.user_id}`} className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-full bg-app-bg flex items-center justify-center text-app-subtext text-xs font-bold">
-              {article.username?.charAt(0).toUpperCase()}
+              {getDisplayInitial(article)}
             </div>
             <div>
-              <p className="text-sm font-semibold text-app-text">{article.username}</p>
+              <p className="text-sm font-semibold text-app-text">{getDisplayName(article)}</p>
               <p className="text-xs text-app-subtext">
                 {formatDate(article.created_at)}
                 {article.read_time > 0 && ` · ${article.read_time} min read`}

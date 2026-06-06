@@ -15,6 +15,12 @@ function sanitizeInput(input) {
   return cleaned;
 }
 
+function normalizeOptionalString(value) {
+  if (value === undefined) return undefined;
+  const cleaned = sanitizeInput(value);
+  return cleaned || null;
+}
+
 const VALID_AVATARS = [
   'default-1','default-2','default-3','default-4',
   'default-5','default-6','default-7','default-8',
@@ -95,9 +101,11 @@ router.put('/profile', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const { nickname, email, birthday, bio, avatar } = req.body;
 
-    const safeNickname = nickname ? sanitizeInput(nickname) : null;
-    const safeEmail = email ? sanitizeInput(email) : null;
-    const safeBio = bio ? sanitizeInput(bio) : null;
+    const safeNickname = normalizeOptionalString(nickname);
+    const safeEmail = normalizeOptionalString(email);
+    const safeBirthday = normalizeOptionalString(birthday);
+    const safeBio = normalizeOptionalString(bio);
+    const safeAvatar = normalizeOptionalString(avatar);
 
     if (safeNickname && (safeNickname.length < 1 || safeNickname.length > 30)) {
       return res.status(400).json({ error: '昵称长度需在 1-30 个字符之间' });
@@ -111,20 +119,27 @@ router.put('/profile', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: '个性签名不能超过200个字符' });
     }
 
-    if (avatar && !VALID_AVATARS.includes(avatar) && !avatar.startsWith('custom/')) {
+    if (safeAvatar && !VALID_AVATARS.includes(safeAvatar) && !safeAvatar.startsWith('custom/')) {
       return res.status(400).json({ error: '无效的头像选择' });
     }
 
-    await dbRun(
-      `UPDATE users SET
-        nickname = COALESCE(?, nickname),
-        email = COALESCE(?, email),
-        birthday = COALESCE(?, birthday),
-        bio = COALESCE(?, bio),
-        avatar = COALESCE(?, avatar)
-       WHERE id = ?`,
-      [safeNickname, safeEmail, birthday || null, safeBio, avatar || null, userId]
+    const allowedFields = {
+      nickname: safeNickname,
+      email: safeEmail,
+      birthday: safeBirthday,
+      bio: safeBio,
+      avatar: safeAvatar,
+    };
+    const updates = Object.entries(allowedFields).filter(([field]) =>
+      Object.prototype.hasOwnProperty.call(req.body, field)
     );
+
+    if (updates.length > 0) {
+      await dbRun(
+        `UPDATE users SET ${updates.map(([field]) => `${field} = ?`).join(', ')} WHERE id = ?`,
+        [...updates.map(([, value]) => value), userId]
+      );
+    }
 
     const updated = await dbGet(
       `SELECT id, username, nickname, email, birthday, bio, avatar, created_at
@@ -152,7 +167,7 @@ router.get('/:id/articles', async (req, res) => {
               substr(articles.content, 1, 200) as excerpt,
               articles.created_at,
               articles.user_id,
-              users.username,
+              users.username, users.nickname,
               (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
