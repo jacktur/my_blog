@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="默认头像 5">
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g stroke="#6d3b35" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="118" y="162" width="276" height="248" rx="58" fill="#d8e5ee"/>
+    <path fill="#ffffff" d="M159 255c0-38 31-67 73-67h48c42 0 73 29 73 67v43c0 50-38 87-97 87s-97-37-97-87v-43z"/>
+    <path fill="none" d="M256 162v-50M219 112h74M118 283H84M428 283h-34"/>
+    <circle cx="201" cy="284" r="19" fill="#2467c9" stroke="none"/>
+    <circle cx="311" cy="284" r="19" fill="#2467c9" stroke="none"/>
+  </g>
+  <g stroke="#6d3b35" stroke-width="15" stroke-linecap="round" fill="none">
+    <path d="M230 331h52"/>
+  </g>
+</svg>

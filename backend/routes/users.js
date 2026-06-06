@@ -17,7 +17,8 @@ function sanitizeInput(input) {
 
 const VALID_AVATARS = [
   'default-1','default-2','default-3','default-4',
-  'default-5','default-6','default-7','default-8'
+  'default-5','default-6','default-7','default-8',
+  'default-9','default-10'
 ];
 
 /**

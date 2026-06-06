@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="默认头像 3">
+  <rect width="512" height="512" fill="#ffffff"/>
+  <g stroke="#6d3b35" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="154" cy="178" r="55" fill="#c89f72"/>
+    <circle cx="358" cy="178" r="55" fill="#c89f72"/>
+    <path fill="#c89f72" d="M112 303c0-91 58-153 144-153s144 62 144 153c0 89-58 149-144 149s-144-60-144-149z"/>
+    <path fill="#ffffff" d="M171 326c0-58 35-95 85-95s85 37 85 95c0 57-35 92-85 92s-85-35-85-92z"/>
+    <path fill="#e7c29c" d="M230 313c0-17 11-29 26-29s26 12 26 29c0 16-11 28-26 28s-26-12-26-28z"/>
+  </g>
+  <g stroke="#2467c9" stroke-width="16" stroke-linecap="round">
+    <path d="M207 274v34M305 274v34"/>
+  </g>
+  <g stroke="#6d3b35" stroke-width="15" stroke-linecap="round" fill="none">
+    <path d="M237 357c14 14 24 14 38 0"/>
+  </g>
+</svg>
