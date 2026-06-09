@@ -1,57 +1,129 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { loginApi } from '../api';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowRight, KeyRound, Mail, ShieldCheck, UserRound } from 'lucide-react';
+import { getGoogleAuthUrl, loginApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
-  const [username, setUsername] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState(() => searchParams.get('error') || '');
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault(); setError('');
-    if (!username.trim() || !password.trim()) return setError('请填写所有字段');
+    e.preventDefault();
+    setError('');
+
+    const id = identifier.trim();
+    const pwd = password.trim();
+    if (!id || !pwd) return setError('请填写用户名/邮箱和密码');
+
     setLoading(true);
     try {
-      const res = await loginApi(username.trim(), password.trim());
+      const res = await loginApi(id, pwd);
       login(res.data.user, res.data.token);
       navigate('/');
-    } catch (err) { setError(err.response?.data?.error || '登录失败'); }
-    finally { setLoading(false); }
+    } catch (err) {
+      setError(err.response?.data?.error || '登录失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-app-text">登录</h1>
-          <p className="text-app-subtext text-sm mt-1">欢迎回来</p>
+    <div className="min-h-[82vh] flex items-center justify-center px-3 py-6">
+      <div className="w-full max-w-[460px]">
+        <div className="mb-5">
+          <p className="text-xs font-semibold text-app-blue">极客博客账号</p>
+          <h1 className="mt-2 text-3xl font-bold text-app-text">欢迎回来</h1>
+          <p className="mt-2 text-sm leading-6 text-app-subtext">
+            使用用户名或邮箱登录，继续管理你的文章、收藏和创作进度。
+          </p>
         </div>
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 shadow-card space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-app-text mb-1.5">用户名</label>
-            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} maxLength={30}
-              className="w-full px-4 py-2.5 rounded-xl bg-app-bg border border-app-border text-app-text text-sm
-                placeholder-app-subtext focus:outline-none focus:border-app-blue/50 focus:ring-2 focus:ring-app-blue/10 transition-all"
-              placeholder="输入用户名" />
+
+        <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-app-border bg-white p-5 shadow-card">
+          <a
+            href={getGoogleAuthUrl()}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-app-border bg-white text-sm font-semibold text-app-text transition-colors hover:bg-app-bg"
+          >
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-app-border text-xs font-bold text-app-blue">
+              G
+            </span>
+            使用 Google 登录
+          </a>
+
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-app-border" />
+            <span className="text-xs text-app-subtext">或使用密码</span>
+            <div className="h-px flex-1 bg-app-border" />
           </div>
+
           <div>
-            <label className="block text-xs font-medium text-app-text mb-1.5">密码</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={100}
-              className="w-full px-4 py-2.5 rounded-xl bg-app-bg border border-app-border text-app-text text-sm
-                placeholder-app-subtext focus:outline-none focus:border-app-blue/50 focus:ring-2 focus:ring-app-blue/10 transition-all"
-              placeholder="输入密码" />
+            <label className="mb-1.5 block text-xs font-medium text-app-text">用户名或邮箱</label>
+            <div className="relative">
+              <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-subtext" />
+              <input
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                maxLength={80}
+                className="h-11 w-full rounded-xl border border-app-border bg-app-bg pl-10 pr-3 text-sm text-app-text outline-none transition-all placeholder:text-app-subtext focus:border-app-blue/50 focus:ring-2 focus:ring-app-blue/10"
+                placeholder="用户名 / 邮箱"
+                autoComplete="username"
+              />
+            </div>
           </div>
-          {error && <div className="px-3 py-2 rounded-xl bg-red-50 border border-red-100"><p className="text-app-red text-xs">{error}</p></div>}
-          <button type="submit" disabled={loading}
-            className="w-full py-2.5 rounded-xl bg-app-blue text-white font-semibold text-sm hover:bg-app-blue/90 disabled:opacity-50 transition-colors">
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-app-text">密码</label>
+            <div className="relative">
+              <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-subtext" />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                maxLength={100}
+                className="h-11 w-full rounded-xl border border-app-border bg-app-bg pl-10 pr-3 text-sm text-app-text outline-none transition-all placeholder:text-app-subtext focus:border-app-blue/50 focus:ring-2 focus:ring-app-blue/10"
+                placeholder="输入密码"
+                autoComplete="current-password"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-app-red">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-app-text text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+          >
             {loading ? '登录中...' : '登录'}
+            {!loading && <ArrowRight className="h-4 w-4" />}
           </button>
-          <p className="text-center text-app-subtext text-xs">
-            没有账号？<Link to="/register" className="text-app-blue hover:underline ml-1">注册</Link>
+
+          <div className="grid grid-cols-2 gap-3 pt-1 text-xs text-app-subtext">
+            <div className="flex items-center gap-1.5">
+              <ShieldCheck className="h-4 w-4 text-app-green" />
+              JWT 安全会话
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Mail className="h-4 w-4 text-app-blue" />
+              支持邮箱登录
+            </div>
+          </div>
+
+          <p className="pt-1 text-center text-xs text-app-subtext">
+            还没有账号？
+            <Link to="/register" className="ml-1 font-semibold text-app-blue hover:underline">
+              创建账号
+            </Link>
           </p>
         </form>
       </div>

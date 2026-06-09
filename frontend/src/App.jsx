@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import FollowingPosts from './pages/FollowingPosts';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import GoogleAuthSuccess from './pages/GoogleAuthSuccess';
 import ArticleDetail from './pages/ArticleDetail';
 import CreateArticle from './pages/CreateArticle';
 import SearchResults from './pages/SearchResults';
@@ -36,6 +37,7 @@ function AppContent() {
               <Route path="/following" element={<FollowingPosts />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/auth/google/success" element={<GoogleAuthSuccess />} />
               <Route path="/article/:id" element={<ArticleDetail />} />
               <Route path="/create" element={<CreateArticle />} />
               <Route path="/edit/:id" element={<CreateArticle />} />

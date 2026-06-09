@@ -23,6 +23,8 @@ function migrateUsersTable() {
   const migrations = [
     "ALTER TABLE users ADD COLUMN nickname TEXT DEFAULT NULL",
     "ALTER TABLE users ADD COLUMN email TEXT DEFAULT NULL",
+    "ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN google_id TEXT DEFAULT NULL",
     "ALTER TABLE users ADD COLUMN birthday TEXT DEFAULT NULL",
     "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT NULL",
     "ALTER TABLE users ADD COLUMN avatar TEXT DEFAULT 'default-1'",
@@ -167,6 +169,17 @@ function initDatabase() {
     );
   `;
 
+  const createEmailVerificationCodesTable = `
+    CREATE TABLE IF NOT EXISTS email_verification_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      used_at DATETIME DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+
   db.serialize(() => {
     db.run(createUsersTable, (err) => {
       if (err) {
@@ -233,6 +246,14 @@ function initDatabase() {
         console.error('[DB] 创建 notifications 表失败:', err.message);
       } else {
         console.log('[DB] notifications 表已就绪');
+      }
+    });
+
+    db.run(createEmailVerificationCodesTable, (err) => {
+      if (err) {
+        console.error('[DB] 创建 email_verification_codes 表失败:', err.message);
+      } else {
+        console.log('[DB] email_verification_codes 表已就绪');
       }
     });
 

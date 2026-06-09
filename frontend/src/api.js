@@ -34,10 +34,13 @@ api.interceptors.response.use(
 );
 
 // ====== Auth API ======
-export const registerApi = (username, password) =>
-  api.post('/auth/register', { username, password });
-export const loginApi = (username, password) =>
-  api.post('/auth/login', { username, password });
+export const sendRegisterCodeApi = (email) =>
+  api.post('/auth/send-code', { email });
+export const registerApi = (email, username, password, code) =>
+  api.post('/auth/register', { email, username, password, code });
+export const loginApi = (identifier, password) =>
+  api.post('/auth/login', { identifier, password });
+export const getGoogleAuthUrl = () => '/auth/google';
 
 // ====== Articles API ======
 export const getArticlesApi = (tag) => {

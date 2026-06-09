@@ -67,6 +67,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 路由
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
 app.use('/api/articles/:id', commentRoutes);
 app.use('/api/tags', tagRoutes);
