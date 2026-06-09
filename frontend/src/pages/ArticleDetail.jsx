@@ -11,7 +11,7 @@ import TableOfContents from '../components/TableOfContents';
 import BookmarkButton from '../components/BookmarkButton';
 import EnhancedCodeBlock from '../components/EnhancedCodeBlock';
 import { splitHtmlAtCodeBlocks } from '../utils/codeBlockEnhancer';
-import { getDisplayInitial, getDisplayName } from '../utils/displayName';
+import { getAvatarUrl, getDisplayName } from '../utils/displayName';
 
 export default function ArticleDetail() {
   const { id } = useParams();
@@ -125,8 +125,13 @@ export default function ArticleDetail() {
         {/* Author row */}
         <div className="flex items-center gap-3 mb-6 pb-6 border-b border-app-border">
           <Link to={`/profile/${article.user_id}`} className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-app-bg flex items-center justify-center text-app-subtext text-xs font-bold">
-              {getDisplayInitial(article)}
+            <div className="w-9 h-9 rounded-full overflow-hidden bg-app-bg ring-1 ring-app-border">
+              <img
+                src={getAvatarUrl(article)}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={(e) => { e.currentTarget.src = '/uploads/avatars/defaults/default-1.svg'; }}
+              />
             </div>
             <div>
               <p className="text-sm font-semibold text-app-text">{getDisplayName(article)}</p>

@@ -29,7 +29,7 @@ router.get('/comments', async (req, res) => {
 
     const comments = await dbAll(
       `SELECT comments.id, comments.content, comments.created_at,
-              users.id as user_id, users.username, users.nickname
+              users.id as user_id, users.username, users.nickname, users.avatar
        FROM comments
        JOIN users ON comments.user_id = users.id
        WHERE comments.article_id = ?
@@ -78,7 +78,7 @@ router.post('/comments', authenticateToken, async (req, res) => {
     // 返回新创建的评论（包含用户名）
     const newComment = await dbGet(
       `SELECT comments.id, comments.content, comments.created_at,
-              users.id as user_id, users.username, users.nickname
+              users.id as user_id, users.username, users.nickname, users.avatar
        FROM comments
        JOIN users ON comments.user_id = users.id
        WHERE comments.id = ?`,

@@ -4,6 +4,9 @@
   "description": "极客风格个人博客系统 — React + Express + SQLite",
   "private": true,
   "scripts": {
+    "postinstall": "npm install --prefix backend && npm install --prefix frontend",
+    "setup:env": "node scripts/ensure-backend-env.js",
+    "predev": "npm run setup:env",
     "dev": "concurrently -n BACK,FRONT -c cyan,magenta \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && node server.js",
     "dev:frontend": "cd frontend && npm run dev"

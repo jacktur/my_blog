@@ -65,48 +65,41 @@ cd D:\blog
 
 ### 2. 安装依赖
 
-这个项目分为根目录、前端、后端三部分，需要分别安装依赖：
+根目录安装会自动安装后端和前端依赖：
 
 ```bash
 npm install
-cd backend
-npm install
-cd ../frontend
-npm install
-cd ..
 ```
 
 ### 3. 配置后端环境变量
 
-复制环境变量示例文件：
+复制开发环境变量示例文件：
 
 ```bash
-cd backend
-cp .env.example .env
-cd ..
+cp backend/.env.example backend/.env
 ```
 
 Windows PowerShell：
 
 ```powershell
-cd backend
-copy .env.example .env
-cd ..
+copy backend\.env.example backend\.env
 ```
 
-建议修改 `backend/.env` 中的 `JWT_SECRET`：
-
-```bash
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-```
-
-示例配置：
+开发默认配置：
 
 ```env
-JWT_SECRET=请替换为强随机字符串
+JWT_SECRET=dev_jwt_secret
 PORT=3001
 NODE_ENV=development
 ```
+
+开发模式启动时，后端会自动执行 [backend/seeds/developmentSeed.js](backend/seeds/developmentSeed.js)，写入测试账号和文章数据：
+
+- `master / 123456`
+- `robot7 / 123456`
+- `robot7` 固定拥有 3 篇测试文章，点赞数分别为 20、10、0，并写入对应测试成就
+
+这个 seed 是幂等的，重复启动不会无限复制文章或点赞，适合每次切换到新 worktree 后直接作为项目测试环境使用。
 
 ### 4. 启动开发环境
 
@@ -121,6 +114,14 @@ npm run dev
 - 前端地址：`http://localhost:5173`
 - 后端地址：`http://localhost:3001`
 - 健康检查：`http://localhost:3001/api/health`
+
+新建 worktree 后的最短启动流程：
+
+```powershell
+npm install
+copy backend\.env.example backend\.env
+npm run dev
+```
 
 ## 生产构建
 
@@ -272,12 +273,9 @@ cd /var/www
 git clone https://github.com/jacktur/my_blog.git my_blog
 cd my_blog
 npm install
-cd backend
-npm install
-cp .env.example .env
-nano .env
-cd ../frontend
-npm install
+cp backend/.env.example backend/.env
+nano backend/.env
+cd frontend
 npm run build
 cd ../backend
 NODE_ENV=production node server.js

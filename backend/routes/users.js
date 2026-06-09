@@ -165,9 +165,9 @@ router.get('/:id/articles', async (req, res) => {
     const articles = await dbAll(
       `SELECT articles.id, articles.title,
               substr(articles.content, 1, 200) as excerpt,
-              articles.created_at,
+              articles.created_at, articles.read_time, articles.cover_image,
               articles.user_id,
-              users.username, users.nickname,
+              users.username, users.nickname, users.avatar,
               (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles

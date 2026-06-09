@@ -49,6 +49,20 @@ function getAchievementImage(code) {
   return `/achievement-badges/${code}.png`;
 }
 
+function toAchievementPayload(achievement, unlockedAt) {
+  return {
+    code: achievement.code,
+    name: achievement.name,
+    description: achievement.description,
+    icon: achievement.icon,
+    image: getAchievementImage(achievement.code),
+    xpReward: achievement.xpReward ?? achievement.xp_reward ?? 0,
+    category: achievement.category,
+    rarity: achievement.rarity,
+    unlockedAt,
+  };
+}
+
 function getLevel(xp) {
   let lvl = LEVELS[0];
   for (const l of LEVELS) {
@@ -336,17 +350,7 @@ async function checkAchievements(userId, triggerEvent, context = {}) {
           type: 'system',
           message: `ACHIEVEMENT: ${ach.name} — ${ach.description}`,
         });
-        newAchievements.push({
-          code: ach.code,
-          name: ach.name,
-          description: ach.description,
-          icon: ach.icon,
-          image: getAchievementImage(ach.code),
-          xpReward: ach.xpReward,
-          category: ach.category,
-          rarity: ach.rarity,
-          unlockedAt,
-        });
+        newAchievements.push(toAchievementPayload(ach, unlockedAt));
       }
     }
 
@@ -355,6 +359,45 @@ async function checkAchievements(userId, triggerEvent, context = {}) {
     console.error('[GAMIFICATION] checkAchievements error:', err.message);
     return [];
   }
+}
+
+async function unlockCompletedAchievements(userId) {
+  const unlocked = await dbAll(
+    'SELECT achievement_id FROM user_achievements WHERE user_id = ?',
+    [userId]
+  );
+  const unlockedIds = new Set(unlocked.map(u => u.achievement_id));
+  const newlyUnlocked = [];
+
+  for (const ach of ACHIEVEMENTS) {
+    if (ach.hidden) continue;
+
+    const dbAch = await dbGet('SELECT id FROM achievements WHERE code = ?', [ach.code]);
+    if (!dbAch || unlockedIds.has(dbAch.id)) continue;
+
+    const progress = await getAchievementProgress(userId, ach);
+    const complete = progress.target > 0 && progress.percent >= 100;
+    if (!complete) continue;
+
+    const unlockedAt = new Date().toISOString();
+    await dbRun(
+      'INSERT INTO user_achievements (user_id, achievement_id, unlocked_at) VALUES (?, ?, ?)',
+      [userId, dbAch.id, unlockedAt]
+    );
+    if (ach.xpReward > 0) {
+      await grantXP(userId, ach.xpReward, `achievement:${ach.code}`, 'achievement', dbAch.id);
+    }
+    await createNotification({
+      userId,
+      type: 'system',
+      message: `ACHIEVEMENT: ${ach.name} — ${ach.description}`,
+    });
+
+    unlockedIds.add(dbAch.id);
+    newlyUnlocked.push(toAchievementPayload(ach, unlockedAt));
+  }
+
+  return newlyUnlocked;
 }
 
 // ====== Internal: Add Activity Feed ======
@@ -472,6 +515,7 @@ router.get('/leaderboard', async (req, res) => {
  */
 router.get('/achievements', authenticateToken, async (req, res) => {
   try {
+    const newlyUnlocked = await unlockCompletedAchievements(req.user.id);
     const allAch = await dbAll('SELECT * FROM achievements ORDER BY id');
     const userAch = await dbAll(
       `SELECT a.id, ua.unlocked_at
@@ -487,6 +531,7 @@ router.get('/achievements', authenticateToken, async (req, res) => {
       const condition = meta.condition || JSON.parse(a.condition_json || '{}');
       const unlocked = userAchSet.has(a.id);
       const progress = await getAchievementProgress(req.user.id, { ...a, ...meta, condition });
+      const unlockedAt = userAch.find(u => u.id === a.id)?.unlocked_at || null;
 
       return {
         ...a,
@@ -500,14 +545,19 @@ router.get('/achievements', authenticateToken, async (req, res) => {
         hidden: !!meta.hidden,
         image: getAchievementImage(a.code),
         unlocked,
-        unlockedAt: userAch.find(u => u.id === a.id)?.unlocked_at || null,
+        unlockedAt,
         progress: unlocked
-          ? { ...progress, percent: 100, current: progress.target || progress.current }
+          ? {
+              ...progress,
+              percent: 100,
+              current: progress.target || progress.current,
+              label: progress.target > 0 ? `${progress.target}/${progress.target}` : progress.label,
+            }
           : progress,
       };
     }));
 
-    res.json({ achievements: result });
+    res.json({ achievements: result, newlyUnlocked });
   } catch (err) {
     console.error('[GAMIFICATION] achievements error:', err.message);
     res.status(500).json({ error: '服务器内部错误' });

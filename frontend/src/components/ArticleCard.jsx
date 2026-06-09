@@ -1,9 +1,18 @@
 import { Link } from 'react-router-dom';
 import { MessageSquare, ThumbsUp, Bookmark, Eye, Repeat2 } from 'lucide-react';
 import BookmarkButton from './BookmarkButton';
-import { getDisplayInitial, getDisplayName } from '../utils/displayName';
+import { useAuth } from '../context/AuthContext';
+import { likeArticleApi } from '../api';
+import { useXpNotification } from './XPNotification';
+import { getAvatarUrl, getDisplayName } from '../utils/displayName';
+import { useState } from 'react';
 
 export default function ArticleCard({ article }) {
+  const { user } = useAuth();
+  const { notifyGamification } = useXpNotification();
+  const [likeCount, setLikeCount] = useState(article.like_count ?? 0);
+  const [liking, setLiking] = useState(false);
+
   const formatDate = (dateStr) => {
     const d = new Date(dateStr);
     const now = new Date();
@@ -13,12 +22,35 @@ export default function ArticleCard({ article }) {
     return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
   };
 
+  const handleLike = async () => {
+    if (!user) {
+      alert('请先登录');
+      return;
+    }
+    if (liking) return;
+    setLiking(true);
+    try {
+      const res = await likeArticleApi(article.id);
+      setLikeCount(res.data.likes);
+      notifyGamification(res.data.gamification?.self);
+    } catch (err) {
+      alert(err.response?.data?.error || '点赞失败');
+    } finally {
+      setLiking(false);
+    }
+  };
+
   return (
     <div className="card-hoverable p-4">
       {/* Author row */}
       <div className="flex items-center gap-2.5 mb-3">
-        <div className="w-8 h-8 rounded-full bg-app-bg flex items-center justify-center text-app-subtext text-xs font-bold">
-          {getDisplayInitial(article)}
+        <div className="w-8 h-8 rounded-full overflow-hidden bg-app-bg ring-1 ring-app-border">
+          <img
+            src={getAvatarUrl(article)}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={(e) => { e.currentTarget.src = '/uploads/avatars/defaults/default-1.svg'; }}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-app-text truncate">{getDisplayName(article)}</p>
@@ -73,14 +105,22 @@ export default function ArticleCard({ article }) {
           <Repeat2 size={14} />
           转发
         </span>
-        <span className="flex items-center gap-1">
+        <Link
+          to={`/article/${article.id}#comments`}
+          className="flex items-center gap-1 cursor-pointer hover:text-app-blue transition-colors"
+        >
           <MessageSquare size={14} />
           {article.comment_count ?? 0}
-        </span>
-        <span className="flex items-center gap-1">
+        </Link>
+        <button
+          type="button"
+          onClick={handleLike}
+          disabled={liking}
+          className="flex items-center gap-1 cursor-pointer hover:text-app-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           <ThumbsUp size={14} />
-          {article.like_count ?? 0}
-        </span>
+          {likeCount}
+        </button>
         <BookmarkButton articleId={article.id} />
       </div>
     </div>

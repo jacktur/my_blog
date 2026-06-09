@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAchievementsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
+import { useXpNotification } from '../components/XPNotification';
 import {
   ArrowLeft,
   Award,
@@ -137,6 +138,7 @@ function AchievementCard({ achievement }) {
 
 export default function AchievementsPage() {
   const { isAuthenticated } = useAuth();
+  const { notifyGamification } = useXpNotification();
   const [achievements, setAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('all');
@@ -145,10 +147,15 @@ export default function AchievementsPage() {
     if (!isAuthenticated) return;
     setLoading(true);
     getAchievementsApi()
-      .then(r => setAchievements(r.data.achievements || []))
+      .then(r => {
+        setAchievements(r.data.achievements || []);
+        if (r.data.newlyUnlocked?.length) {
+          notifyGamification({ achievements: r.data.newlyUnlocked });
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [isAuthenticated]);
+  }, [isAuthenticated, notifyGamification]);
 
   const visibleCategories = useMemo(() => {
     const categories = new Set(achievements.map(a => a.category).filter(Boolean));

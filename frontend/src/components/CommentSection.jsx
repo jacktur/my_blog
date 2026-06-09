@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { getCommentsApi, createCommentApi, deleteCommentApi, getLikeCountApi, checkLikeStatusApi, likeArticleApi } from '../api';
 import { MessageSquare, ThumbsUp, Send, Trash2 } from 'lucide-react';
 import { useXpNotification } from './XPNotification';
-import { getDisplayInitial, getDisplayName } from '../utils/displayName';
+import { getAvatarUrl, getDisplayName } from '../utils/displayName';
 
 export default function CommentSection({ articleId }) {
   const { user } = useAuth();
@@ -72,7 +72,7 @@ export default function CommentSection({ articleId }) {
   };
 
   return (
-    <div className="mt-10 pt-8 border-t border-app-border">
+    <div id="comments" className="mt-10 pt-8 border-t border-app-border">
       {/* Like button */}
       <div className="flex items-center gap-4 mb-6 pb-6 border-b border-app-border">
         <button onClick={handleLike} disabled={liking || remainingLikes <= 0}
@@ -103,8 +103,13 @@ export default function CommentSection({ articleId }) {
             <div key={c.id} className="p-3 bg-white rounded-xl border border-app-border hover:border-app-blue/20 transition-colors">
               <div className="flex items-center justify-between mb-1.5">
                 <Link to={`/profile/${c.user_id}`} className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-app-bg flex items-center justify-center text-app-subtext text-[10px] font-bold">
-                    {getDisplayInitial(c)}
+                  <div className="w-6 h-6 rounded-full overflow-hidden bg-app-bg ring-1 ring-app-border">
+                    <img
+                      src={getAvatarUrl(c)}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.currentTarget.src = '/uploads/avatars/defaults/default-1.svg'; }}
+                    />
                   </div>
                   <span className="text-xs font-medium text-app-text">{getDisplayName(c)}</span>
                   <span className="text-[10px] text-app-subtext">{formatDate(c.created_at)}</span>

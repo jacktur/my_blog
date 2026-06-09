@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const { seedDevelopmentData } = require('./seeds/developmentSeed');
 
 // 数据库文件存放在 backend 目录下
 const dbPath = path.join(__dirname, 'blog.sqlite');
@@ -266,7 +267,9 @@ function initDatabase() {
       if (err) console.error('[DB] 创建 user_achievements 表失败:', err.message);
       else {
         console.log('[DB] user_achievements 表已就绪');
-        seedAchievements();
+        seedAchievements().catch((seedErr) => {
+          console.error('[DB] 成就种子数据初始化失败:', seedErr.message);
+        });
       }
     });
 
@@ -309,7 +312,14 @@ function initDatabase() {
 
     db.run(createConversationReadersTable, (err) => {
       if (err) console.error('[DB] 创建 conversation_readers 表失败:', err.message);
-      else console.log('[DB] conversation_readers 表已就绪');
+      else {
+        console.log('[DB] conversation_readers 表已就绪');
+        seedAchievements()
+          .then(() => seedDevelopmentData({ dbGet, dbRun }))
+          .catch((seedErr) => {
+            console.error('[DB] 开发种子数据初始化失败:', seedErr.message);
+          });
+      }
     });
   });
 }
@@ -505,18 +515,16 @@ const SEED_ACHIEVEMENTS = [
   ['tag_master', '标签架构师', '在文章中使用 10 个不同标签', 'hash', 75, 'publish_article', '{"count":10,"field":"unique_tags"}'],
 ];
 
-function seedAchievements() {
-  db.get('SELECT COUNT(*) as count FROM achievements', (err, row) => {
-    if (err) return console.error('[DB] 检查成就数据错误:', err.message);
-    if (row.count === 0) {
-      const stmt = db.prepare('INSERT OR IGNORE INTO achievements (code, name, description, icon, xp_reward, trigger_event, condition_json) VALUES (?, ?, ?, ?, ?, ?, ?)');
-      for (const a of SEED_ACHIEVEMENTS) {
-        stmt.run(a, (e) => { if (e) console.error('[DB] 插入成就错误:', e.message); });
-      }
-      stmt.finalize();
-      console.log('[DB] 成就种子数据已初始化');
-    }
-  });
+async function seedAchievements() {
+  for (const achievement of SEED_ACHIEVEMENTS) {
+    await dbRun(
+      `INSERT OR IGNORE INTO achievements
+       (code, name, description, icon, xp_reward, trigger_event, condition_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      achievement
+    );
+  }
+  console.log('[DB] 成就种子数据已同步');
 }
 
 const createArticleAnalyticsTable = `
