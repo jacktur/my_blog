@@ -33,22 +33,24 @@ const ROBOT7_ARTICLES = [
   },
 ];
 
-async function ensureUser(dbGet, dbRun, username, password, nickname, avatar = 'default-1') {
+async function ensureUser(dbGet, dbRun, username, password, nickname, avatar = 'default-1', options = {}) {
   const hashedPassword = await bcrypt.hash(password, 10);
   const existing = await dbGet('SELECT id FROM users WHERE username = ?', [username]);
+  const role = options.role || 'user';
+  const status = options.status || 'active';
 
   if (existing) {
     await dbRun(
-      'UPDATE users SET password = ?, nickname = ?, avatar = ? WHERE id = ?',
-      [hashedPassword, nickname, avatar, existing.id]
+      'UPDATE users SET password = ?, nickname = ?, avatar = ?, role = ?, status = ? WHERE id = ?',
+      [hashedPassword, nickname, avatar, role, status, existing.id]
     );
     return existing.id;
   }
 
   const result = await dbRun(
-    `INSERT INTO users (username, password, nickname, avatar)
-     VALUES (?, ?, ?, ?)`,
-    [username, hashedPassword, nickname, avatar]
+    `INSERT INTO users (username, password, nickname, avatar, role, status)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [username, hashedPassword, nickname, avatar, role, status]
   );
   return result.lastID;
 }
@@ -123,6 +125,7 @@ async function unlockAchievement(dbGet, dbRun, userId, code) {
 async function seedDevelopmentData({ dbGet, dbRun }) {
   if (process.env.NODE_ENV !== 'development') return;
 
+  await ensureUser(dbGet, dbRun, 'admin', '12345678', '站长', 'default-1', { role: 'admin' });
   const masterId = await ensureUser(dbGet, dbRun, 'master', '123456', 'Master');
   const robot7Id = await ensureUser(dbGet, dbRun, 'robot7', '123456', 'robot7', 'default-7');
 
@@ -136,7 +139,7 @@ async function seedDevelopmentData({ dbGet, dbRun }) {
   await unlockAchievement(dbGet, dbRun, robot7Id, 'first_article');
   await unlockAchievement(dbGet, dbRun, robot7Id, 'first_like_received');
 
-  console.log('[DB] 开发 seed 已同步: master / 123456, robot7 / 123456');
+  console.log('[DB] 开发 seed 已同步: admin / 12345678, master / 123456, robot7 / 123456');
 }
 
 module.exports = { seedDevelopmentData };

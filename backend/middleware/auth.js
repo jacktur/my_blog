@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { dbGet } = require('../database');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -19,14 +20,36 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: '未提供认证令牌' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) {
       return res.status(401).json({ error: '令牌无效或已过期' });
     }
-    // 将解码后的用户信息挂载到 req 上供后续路由使用
-    req.user = user;
-    next();
+
+    try {
+      const currentUser = await dbGet(
+        "SELECT id, username, role, status FROM users WHERE id = ?",
+        [user.id]
+      );
+      if (!currentUser) {
+        return res.status(401).json({ error: '用户不存在' });
+      }
+      if (currentUser.status === 'banned') {
+        return res.status(403).json({ error: '账号已被封禁' });
+      }
+      req.user = currentUser;
+      next();
+    } catch (dbErr) {
+      console.error('[AUTH] 认证用户状态检查失败:', dbErr.message);
+      res.status(500).json({ error: '服务器内部错误' });
+    }
   });
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: '需要站长权限' });
+  }
+  next();
 }
 
 /**
@@ -36,10 +59,10 @@ function authenticateToken(req, res, next) {
  */
 function generateToken(user) {
   return jwt.sign(
-    { id: user.id, username: user.username },
+    { id: user.id, username: user.username, role: user.role || 'user' },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
 }
 
-module.exports = { authenticateToken, generateToken };
+module.exports = { authenticateToken, requireAdmin, generateToken };

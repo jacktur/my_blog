@@ -36,6 +36,8 @@ function publicUser(user) {
     nickname: user.nickname,
     email: user.email,
     avatar: user.avatar || 'default-1',
+    role: user.role || 'user',
+    status: user.status || 'active',
   };
 }
 
@@ -89,6 +91,7 @@ function redirectWithGoogleError(res, reason) {
 async function findUserByIdentifier(identifier) {
   return dbGet(
     `SELECT id, username, password, nickname, email, avatar
+            , role, status
      FROM users
      WHERE username = ? OR lower(email) = lower(?)`,
     [identifier, identifier]
@@ -214,7 +217,7 @@ router.post('/register', async (req, res) => {
       [username, hashedPassword, email]
     );
     const user = await dbGet(
-      'SELECT id, username, nickname, email, avatar FROM users WHERE id = ?',
+      'SELECT id, username, nickname, email, avatar, role, status FROM users WHERE id = ?',
       [result.lastID]
     );
 
@@ -242,6 +245,9 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: '用户名/邮箱或密码错误' });
+    }
+    if (user.status === 'banned') {
+      return res.status(403).json({ error: '账号已被封禁，请联系站长' });
     }
 
     issueAuthResponse(res, user);
@@ -292,12 +298,16 @@ router.get('/google/callback', async (req, res) => {
 
     let user = await dbGet(
       `SELECT id, username, nickname, email, avatar
+              , role, status
        FROM users
        WHERE google_id = ? OR lower(email) = lower(?)`,
       [googleId, email]
     );
 
     if (user) {
+      if (user.status === 'banned') {
+        return redirectWithGoogleError(res, '账号已被封禁，请联系站长');
+      }
       await dbRun(
         'UPDATE users SET google_id = ?, email = COALESCE(email, ?), email_verified = 1 WHERE id = ?',
         [googleId, email, user.id]
@@ -320,13 +330,13 @@ router.get('/google/callback', async (req, res) => {
         [username, randomPassword, email, googleId, payload.name || null]
       );
       user = await dbGet(
-        'SELECT id, username, nickname, email, avatar FROM users WHERE id = ?',
+        'SELECT id, username, nickname, email, avatar, role, status FROM users WHERE id = ?',
         [result.lastID]
       );
     }
 
     const refreshedUser = await dbGet(
-      'SELECT id, username, nickname, email, avatar FROM users WHERE id = ?',
+      'SELECT id, username, nickname, email, avatar, role, status FROM users WHERE id = ?',
       [user.id]
     );
     redirectWithAuth(res, refreshedUser);

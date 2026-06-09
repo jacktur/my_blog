@@ -76,6 +76,22 @@ function migrateUsersGamification() {
   console.log('[DB] users 游戏化字段迁移检查完成');
 }
 
+// 用户表迁移：添加管理与封禁字段
+function migrateUsersAdminFields() {
+  const migrations = [
+    "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'",
+    "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'",
+  ];
+  for (const sql of migrations) {
+    db.run(sql, (err) => {
+      if (err && !err.message.includes('duplicate column')) {
+        console.error('[DB] users 管理字段迁移错误:', err.message);
+      }
+    });
+  }
+  console.log('[DB] users 管理字段迁移检查完成');
+}
+
 // 初始化表结构（使用参数化 SQL，防止 SQL 注入）
 function initDatabase() {
   const createUsersTable = `
@@ -83,6 +99,8 @@ function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      status TEXT DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `;
@@ -189,6 +207,7 @@ function initDatabase() {
         // 表创建成功后再运行迁移（兼容已有数据库）
         migrateUsersTable();
         migrateUsersGamification();
+        migrateUsersAdminFields();
       }
     });
 

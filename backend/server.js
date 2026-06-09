@@ -20,6 +20,7 @@ const gamificationRoutes = require('./routes/gamification');
 const draftRoutes = require('./routes/drafts');
 const seriesRoutes = require('./routes/series');
 const chatRoutes = require('./routes/chat');
+const adminRoutes = require('./routes/admin');
 const { suggestTags, extractSummary } = require('./utils/tagSuggester');
 
 const app = express();
@@ -81,6 +82,7 @@ app.use('/api/gamification', gamificationRoutes);
 app.use('/api/drafts', draftRoutes);
 app.use('/api/series', seriesRoutes);
 app.use('/api/conversations', chatRoutes);
+app.use('/api/admin', adminRoutes);
 
 // 确保封面图上传目录存在
 const coversDir = path.join(__dirname, 'uploads', 'covers');

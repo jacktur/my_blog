@@ -19,11 +19,13 @@ import DashboardPage from './pages/DashboardPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import AchievementsPage from './pages/AchievementsPage';
 import ChatPage from './pages/ChatPage';
+import AdminPage from './pages/AdminPage';
 import { XpNotificationProvider } from './components/XPNotification';
 
 function AppContent() {
   const location = useLocation();
   const isChat = location.pathname === '/chat';
+  const isWidePage = isChat || location.pathname === '/admin';
 
   return (
     <div className="min-h-screen bg-app-bg flex flex-col">
@@ -31,7 +33,7 @@ function AppContent() {
       <div className="flex-1 flex justify-center">
         <div className="flex w-full max-w-7xl gap-6 px-4 py-4">
           <LeftSidebar />
-          <main className={`flex-1 min-w-0 ${isChat ? '' : 'max-w-2xl'}`}>
+          <main className={`flex-1 min-w-0 ${isWidePage ? '' : 'max-w-2xl'}`}>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/following" element={<FollowingPosts />} />
@@ -50,9 +52,10 @@ function AppContent() {
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/leaderboard" element={<LeaderboardPage />} />
               <Route path="/achievements" element={<AchievementsPage />} />
+              <Route path="/admin" element={<AdminPage />} />
             </Routes>
           </main>
-          {!isChat && <RightSidebar />}
+          {!isWidePage && <RightSidebar />}
         </div>
       </div>
     </div>

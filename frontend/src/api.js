@@ -164,4 +164,16 @@ export const sendMessageApi = (conversationId, content) =>
 export const markConversationReadApi = (conversationId) =>
   api.put(`/conversations/${conversationId}/read`);
 
+// ====== Admin API ======
+export const getAdminSummaryApi = () => api.get('/admin/summary');
+export const getAdminUsersApi = () => api.get('/admin/users');
+export const updateAdminUserStatusApi = (id, status) =>
+  api.patch(`/admin/users/${id}/status`, { status });
+export const getAdminArticlesApi = () => api.get('/admin/articles');
+export const deleteAdminArticleApi = (id) => api.delete(`/admin/articles/${id}`);
+export const getAdminCommentsApi = () => api.get('/admin/comments');
+export const deleteAdminCommentApi = (id) => api.delete(`/admin/comments/${id}`);
+export const getAdminMessagesApi = () => api.get('/admin/messages');
+export const deleteAdminMessageApi = (id) => api.delete(`/admin/messages/${id}`);
+
 export default api;

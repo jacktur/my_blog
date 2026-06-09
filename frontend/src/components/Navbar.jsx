@@ -109,6 +109,12 @@ export default function Navbar() {
                         className="block px-4 py-2.5 text-sm text-app-text hover:bg-app-bg transition-colors">
                         控制台
                       </Link>
+                      {user?.role === 'admin' && (
+                        <Link to="/admin" onClick={() => setMenuOpen(false)}
+                          className="block px-4 py-2.5 text-sm text-app-text hover:bg-app-bg transition-colors">
+                          内容审核
+                        </Link>
+                      )}
                       <Link to="/reading-list" onClick={() => setMenuOpen(false)}
                         className="block px-4 py-2.5 text-sm text-app-text hover:bg-app-bg transition-colors">
                         收藏列表
