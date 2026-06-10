@@ -32,7 +32,7 @@ router.get('/comments', async (req, res) => {
               users.id as user_id, users.username, users.nickname, users.avatar
        FROM comments
        JOIN users ON comments.user_id = users.id
-       WHERE comments.article_id = ?
+       WHERE comments.article_id = ? AND comments.deleted_at IS NULL
        ORDER BY comments.created_at ASC`,
       [id]
     );
@@ -63,7 +63,7 @@ router.post('/comments', authenticateToken, async (req, res) => {
     }
 
     // 检查文章是否存在
-    const article = await dbGet('SELECT id, user_id FROM articles WHERE id = ?', [id]);
+    const article = await dbGet('SELECT id, user_id FROM articles WHERE id = ? AND deleted_at IS NULL', [id]);
     if (!article) {
       return res.status(404).json({ error: '文章不存在' });
     }
@@ -123,7 +123,7 @@ router.delete('/comments/:commentId', authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     const comment = await dbGet(
-      'SELECT id, user_id FROM comments WHERE id = ?',
+      'SELECT id, user_id FROM comments WHERE id = ? AND deleted_at IS NULL',
       [commentId]
     );
 
@@ -135,7 +135,7 @@ router.delete('/comments/:commentId', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '无权删除此评论' });
     }
 
-    await dbRun('DELETE FROM comments WHERE id = ?', [commentId]);
+    await dbRun("UPDATE comments SET deleted_at = datetime('now') WHERE id = ?", [commentId]);
 
     res.json({ message: '评论删除成功' });
   } catch (err) {
@@ -203,7 +203,7 @@ router.post('/like', authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     // 检查文章是否存在
-    const article = await dbGet('SELECT id, user_id FROM articles WHERE id = ?', [id]);
+    const article = await dbGet('SELECT id, user_id FROM articles WHERE id = ? AND deleted_at IS NULL', [id]);
     if (!article) {
       return res.status(404).json({ error: '文章不存在' });
     }

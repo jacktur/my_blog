@@ -12,6 +12,15 @@
   --color-app-blue: #007AFF;
 }
 
+:root.theme-dark {
+  --color-app-bg: #121418;
+  --color-app-card: #1D2128;
+  --color-app-border: #323844;
+  --color-app-text: #F5F7FA;
+  --color-app-subtext: #A8B0BD;
+  --color-app-blue: #4DA3FF;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -21,10 +30,30 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
   min-height: 100vh;
-  background: #F2F3F5;
+  background: var(--color-app-bg);
   color: var(--color-app-text);
+  cursor: default;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+a,
+button,
+[role="button"],
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+.markdown-body {
+  cursor: text;
 }
 
 /* Apple-style scrollbar */
@@ -33,22 +62,30 @@ body {
 ::-webkit-scrollbar-thumb { background: #C7C7CC; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #AEAEB2; }
 
+.theme-dark .bg-white { background-color: var(--color-app-card) !important; }
+.theme-dark .bg-gray-50 { background-color: var(--color-app-bg) !important; }
+.theme-dark .bg-gray-100,
+.theme-dark .bg-gray-200 { background-color: #2A303A !important; }
+.theme-dark .text-gray-400 { color: var(--color-app-subtext) !important; }
+.theme-dark .text-gray-700 { color: var(--color-app-text) !important; }
+.theme-dark .border-gray-300 { border-color: var(--color-app-border) !important; }
+
 /* ===== Apple Glass Effect ===== */
 @layer components {
   .glass {
-    background: rgba(255, 255, 255, 0.72);
+    background: color-mix(in srgb, var(--color-app-card) 72%, transparent);
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
   }
 
   .card {
-    background: #FFFFFF;
+    background: var(--color-app-card);
     border-radius: 12px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   }
 
   .card-hoverable {
-    background: #FFFFFF;
+    background: var(--color-app-card);
     border-radius: 12px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
     transition: all 0.2s ease;
@@ -70,7 +107,7 @@ body {
 
 /* ===== Markdown Content ===== */
 .markdown-body {
-  color: #1D1D1F;
+  color: var(--color-app-text);
   line-height: 1.8;
   font-size: 17px;
   letter-spacing: -0.003em;
@@ -79,31 +116,31 @@ body {
 .markdown-body h1 {
   font-size: 2em;
   font-weight: 700;
-  color: #1D1D1F;
+  color: var(--color-app-text);
   margin: 0.8em 0 0.4em;
   padding-bottom: 0.3em;
-  border-bottom: 1px solid #E5E5EA;
+  border-bottom: 1px solid var(--color-app-border);
 }
 
 .markdown-body h2 {
   font-size: 1.5em;
   font-weight: 600;
-  color: #1D1D1F;
+  color: var(--color-app-text);
   margin: 0.7em 0 0.3em;
 }
 
 .markdown-body h3 {
   font-size: 1.25em;
   font-weight: 600;
-  color: #3A3A3C;
+  color: var(--color-app-text);
   margin: 0.6em 0 0.3em;
 }
 
 .markdown-body p { margin: 0.6em 0; line-height: 1.8; }
 
 .markdown-body code {
-  background: #F5F5F7;
-  color: #007AFF;
+  background: var(--color-app-bg);
+  color: var(--color-app-blue);
   padding: 2px 6px;
   border-radius: 4px;
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -111,8 +148,8 @@ body {
 }
 
 .markdown-body pre {
-  background: #F5F5F7;
-  border: 1px solid #E5E5EA;
+  background: var(--color-app-bg);
+  border: 1px solid var(--color-app-border);
   border-radius: 12px;
   padding: 16px;
   overflow-x: auto;
@@ -122,13 +159,13 @@ body {
 .markdown-body pre code {
   background: none;
   padding: 0;
-  color: #1D1D1F;
+  color: var(--color-app-text);
 }
 
 .markdown-body blockquote {
-  border-left: 4px solid #007AFF;
+  border-left: 4px solid var(--color-app-blue);
   padding-left: 16px;
-  color: #86868B;
+  color: var(--color-app-subtext);
   margin: 1em 0;
   font-style: italic;
 }
@@ -141,7 +178,7 @@ body {
 .markdown-body li { line-height: 1.8; }
 
 .markdown-body a {
-  color: #007AFF;
+  color: var(--color-app-blue);
   text-decoration: none;
 }
 .markdown-body a:hover { text-decoration: underline; }
@@ -158,20 +195,20 @@ body {
 }
 
 .markdown-body th, .markdown-body td {
-  border: 1px solid #E5E5EA;
+  border: 1px solid var(--color-app-border);
   padding: 8px 12px;
   text-align: left;
 }
 
 .markdown-body th {
-  background: #F5F5F7;
+  background: var(--color-app-bg);
   font-weight: 600;
-  color: #1D1D1F;
+  color: var(--color-app-text);
 }
 
 .markdown-body hr {
   border: none;
-  border-top: 1px solid #E5E5EA;
+  border-top: 1px solid var(--color-app-border);
   margin: 1.5em 0;
 }
 

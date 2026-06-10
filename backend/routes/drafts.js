@@ -25,6 +25,26 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/drafts/:id
+ * 获取单个草稿详情
+ */
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const draft = await dbGet(
+      `SELECT id, title, content, tags, cover_image, article_id, created_at, updated_at
+       FROM drafts
+       WHERE id = ? AND user_id = ?`,
+      [req.params.id, req.user.id]
+    );
+    if (!draft) return res.status(404).json({ error: '草稿不存在' });
+    res.json({ draft });
+  } catch (err) {
+    console.error('[DRAFTS] 获取草稿详情错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+/**
  * POST /api/drafts
  * 创建草稿
  */
@@ -109,10 +129,7 @@ router.post('/:id/publish', authenticateToken, async (req, res) => {
       [draft.title, draft.content, req.user.id, readTime, coverImage]
     );
 
-    // Set tags
     if (tags.length > 0) {
-      const { setArticleTags } = require('./articles-utils');
-      // Inline tag setup
       for (const tagName of tags) {
         const tag = tagName.trim().toLowerCase();
         if (tag) {

@@ -1,19 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getUserProfileApi, getUserArticlesApi, getUserStatsApi } from '../api';
+import { blockUserApi, getUserProfileApi, getUserArticlesApi, getUserStatsApi, reportApi } from '../api';
 import ArticleCard from '../components/ArticleCard';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Settings, FileText, ThumbsUp, MessageSquare, MapPin } from 'lucide-react';
+import { ArrowLeft, Calendar, Settings, FileText, ThumbsUp, MessageSquare } from 'lucide-react';
+import { useConfirm } from '../components/ConfirmDialog';
+import ReportDialog from '../components/ReportDialog';
 
 export default function Profile() {
   const { id } = useParams();
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [profile, setProfile] = useState(null);
   const [articles, setArticles] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -24,6 +29,30 @@ export default function Profile() {
   }, [id]);
 
   const isOwner = currentUser && profile && currentUser.id === profile.id;
+
+  const handleReportUser = async () => {
+    if (!currentUser) return navigate('/login');
+    setReportOpen(true);
+  };
+
+  const submitReportUser = async ({ reason, details }) => {
+    setReportSubmitting(true);
+    try {
+      await reportApi({ targetType: 'user', targetId: profile.id, reason, details });
+      setReportOpen(false);
+      alert('举报已提交');
+    }
+    catch (err) { alert(err.response?.data?.error || '举报失败'); }
+    finally { setReportSubmitting(false); }
+  };
+
+  const handleBlockUser = async () => {
+    if (!currentUser) return navigate('/login');
+    const ok = await confirm({ title: '屏蔽用户', message: '屏蔽后你们将无法互发私信。确定屏蔽该用户？', confirmText: '屏蔽', danger: true });
+    if (!ok) return;
+    try { await blockUserApi(profile.id); alert('已屏蔽该用户'); }
+    catch (err) { alert(err.response?.data?.error || '屏蔽失败'); }
+  };
 
   const getAvatarUrl = (av) => {
     if (!av) return '/uploads/avatars/defaults/default-1.svg';
@@ -38,6 +67,13 @@ export default function Profile() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
+      <ReportDialog
+        open={reportOpen}
+        title="举报用户"
+        submitting={reportSubmitting}
+        onClose={() => setReportOpen(false)}
+        onSubmit={submitReportUser}
+      />
       <Link to="/" className="inline-flex items-center gap-1.5 text-app-subtext hover:text-app-blue transition-colors text-sm mb-6">
         <ArrowLeft size={14} /> 返回
       </Link>
@@ -57,20 +93,23 @@ export default function Profile() {
                 </Link>
               )}
               {!isOwner && (
-                <button
-                  onClick={() => navigate(`/chat?userId=${profile.id}`)}
-                  className="h-8 px-4 rounded-lg border border-gray-300 text-sm text-gray-700
-                    hover:bg-gray-50 transition-colors font-medium"
-                >
-                  私信
-                </button>
+                <>
+                  <button
+                    onClick={() => navigate(`/chat?userId=${profile.id}`)}
+                    className="h-8 px-4 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+                  >
+                    私信
+                  </button>
+                  <button onClick={handleReportUser} className="h-8 px-3 rounded-lg text-xs text-app-subtext hover:text-app-orange hover:bg-app-bg">举报</button>
+                  <button onClick={handleBlockUser} className="h-8 px-3 rounded-lg text-xs text-app-subtext hover:text-app-red hover:bg-red-50">屏蔽</button>
+                </>
               )}
             </div>
             <p className="text-app-subtext text-sm">@{profile.username}</p>
             {profile.bio && <p className="text-app-text text-sm mt-2 italic">"{profile.bio}"</p>}
             <div className="flex items-center gap-3 mt-2 text-xs text-app-subtext">
               {profile.email && <span>{profile.email}</span>}
-              {profile.birthday && <span><MapPin size={10} className="inline" /> {formatDate(profile.birthday)}</span>}
+              {profile.birthday && <span><Calendar size={10} className="inline" /> {formatDate(profile.birthday)}</span>}
               <span>加入于 {formatDate(profile.created_at)}</span>
             </div>
           </div>

@@ -3,8 +3,8 @@ const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const { OAuth2Client } = require('google-auth-library');
 const router = express.Router();
-const { dbGet, dbRun } = require('../database');
-const { generateToken } = require('../middleware/auth');
+const { dbGet, dbRun, dbAll } = require('../database');
+const { authenticateToken, generateToken } = require('../middleware/auth');
 
 const SALT_ROUNDS = 10;
 const CODE_TTL_MINUTES = 10;
@@ -41,8 +41,12 @@ function publicUser(user) {
   };
 }
 
-function issueAuthResponse(res, user, message = '登录成功') {
-  const token = generateToken({ id: user.id, username: user.username });
+async function issueAuthResponse(req, res, user, message = '登录成功') {
+  const session = await dbRun(
+    'INSERT INTO auth_sessions (user_id, token_version, user_agent, ip) VALUES (?, ?, ?, ?)',
+    [user.id, user.token_version || 0, req.get('user-agent') || null, req.ip || null]
+  ).catch((err) => console.error('[AUTH] 会话记录失败:', err.message));
+  const token = generateToken({ ...user, session_id: session?.lastID });
   return res.json({ message, token, user: publicUser(user) });
 }
 
@@ -74,8 +78,12 @@ function getGoogleClient() {
   );
 }
 
-function redirectWithAuth(res, user) {
-  const token = generateToken({ id: user.id, username: user.username });
+async function redirectWithAuth(req, res, user) {
+  const session = await dbRun(
+    'INSERT INTO auth_sessions (user_id, token_version, user_agent, ip) VALUES (?, ?, ?, ?)',
+    [user.id, user.token_version || 0, req.get('user-agent') || null, req.ip || null]
+  ).catch((err) => console.error('[AUTH] Google 会话记录失败:', err.message));
+  const token = generateToken({ ...user, session_id: session?.lastID });
   const params = new URLSearchParams({
     token,
     user: JSON.stringify(publicUser(user)),
@@ -91,7 +99,7 @@ function redirectWithGoogleError(res, reason) {
 async function findUserByIdentifier(identifier) {
   return dbGet(
     `SELECT id, username, password, nickname, email, avatar
-            , role, status
+    , role, status, COALESCE(token_version, 0) as token_version
      FROM users
      WHERE username = ? OR lower(email) = lower(?)`,
     [identifier, identifier]
@@ -217,11 +225,11 @@ router.post('/register', async (req, res) => {
       [username, hashedPassword, email]
     );
     const user = await dbGet(
-      'SELECT id, username, nickname, email, avatar, role, status FROM users WHERE id = ?',
+      'SELECT id, username, nickname, email, avatar, role, status, COALESCE(token_version, 0) as token_version FROM users WHERE id = ?',
       [result.lastID]
     );
 
-    issueAuthResponse(res.status(201), user, '注册成功');
+    await issueAuthResponse(req, res.status(201), user, '注册成功');
   } catch (err) {
     console.error('[AUTH] 注册错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });
@@ -250,7 +258,7 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: '账号已被封禁，请联系站长' });
     }
 
-    issueAuthResponse(res, user);
+    await issueAuthResponse(req, res, user);
   } catch (err) {
     console.error('[AUTH] 登录错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });
@@ -298,7 +306,7 @@ router.get('/google/callback', async (req, res) => {
 
     let user = await dbGet(
       `SELECT id, username, nickname, email, avatar
-              , role, status
+              , role, status, COALESCE(token_version, 0) as token_version
        FROM users
        WHERE google_id = ? OR lower(email) = lower(?)`,
       [googleId, email]
@@ -330,19 +338,124 @@ router.get('/google/callback', async (req, res) => {
         [username, randomPassword, email, googleId, payload.name || null]
       );
       user = await dbGet(
-        'SELECT id, username, nickname, email, avatar, role, status FROM users WHERE id = ?',
+        'SELECT id, username, nickname, email, avatar, role, status, COALESCE(token_version, 0) as token_version FROM users WHERE id = ?',
         [result.lastID]
       );
     }
 
     const refreshedUser = await dbGet(
-      'SELECT id, username, nickname, email, avatar, role, status FROM users WHERE id = ?',
-      [user.id]
-    );
-    redirectWithAuth(res, refreshedUser);
+      'SELECT id, username, nickname, email, avatar, role, status, COALESCE(token_version, 0) as token_version FROM users WHERE id = ?',
+    [user.id]
+  );
+  await redirectWithAuth(req, res, refreshedUser);
   } catch (err) {
     console.error('[AUTH] Google 回调错误:', err.message);
     redirectWithGoogleError(res, 'Google 登录失败');
+  }
+});
+
+router.get('/config', (req, res) => {
+  res.json({
+    smtpConfigured: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
+    googleConfigured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+  });
+});
+
+router.post('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: '请填写当前密码和新密码' });
+    }
+    if (!isValidPassword(newPassword)) {
+      return res.status(400).json({ error: '新密码长度需在 6-100 个字符之间' });
+    }
+
+    const user = await dbGet('SELECT id, username, password, role, status, COALESCE(token_version, 0) as token_version FROM users WHERE id = ?', [req.user.id]);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+
+    const ok = await bcrypt.compare(currentPassword, user.password);
+    if (!ok) return res.status(401).json({ error: '当前密码错误' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await dbRun('UPDATE users SET password = ?, token_version = COALESCE(token_version, 0) + 1 WHERE id = ?', [hashedPassword, req.user.id]);
+    const refreshed = await dbGet('SELECT id, username, nickname, email, avatar, role, status, COALESCE(token_version, 0) as token_version FROM users WHERE id = ?', [req.user.id]);
+    await issueAuthResponse(req, res, refreshed, '密码已修改');
+  } catch (err) {
+    console.error('[AUTH] 修改密码错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+router.post('/logout-all', authenticateToken, async (req, res) => {
+  try {
+    await dbRun('UPDATE users SET token_version = COALESCE(token_version, 0) + 1 WHERE id = ?', [req.user.id]);
+    await dbRun("UPDATE auth_sessions SET revoked_at = datetime('now') WHERE user_id = ? AND revoked_at IS NULL", [req.user.id]);
+    res.json({ message: '已退出所有设备' });
+  } catch (err) {
+    console.error('[AUTH] 退出所有设备错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+router.get('/sessions', authenticateToken, async (req, res) => {
+  try {
+    const sessions = await dbAll(
+      `SELECT id, user_agent, ip, created_at, last_seen_at, revoked_at
+       FROM auth_sessions
+       WHERE user_id = ?
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [req.user.id]
+    );
+    res.json({ sessions });
+  } catch (err) {
+    console.error('[AUTH] 获取设备列表错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+router.delete('/sessions/:id', authenticateToken, async (req, res) => {
+  try {
+    const result = await dbRun(
+      "UPDATE auth_sessions SET revoked_at = datetime('now') WHERE id = ? AND user_id = ? AND revoked_at IS NULL",
+      [req.params.id, req.user.id]
+    );
+    if (result.changes === 0) return res.status(404).json({ error: '设备会话不存在或已撤销' });
+    res.json({ message: '设备会话已撤销' });
+  } catch (err) {
+    console.error('[AUTH] 撤销设备错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+router.post('/google/unlink', authenticateToken, async (req, res) => {
+  try {
+    const user = await dbGet('SELECT id, password, google_id FROM users WHERE id = ?', [req.user.id]);
+    if (!user?.google_id) return res.status(400).json({ error: '当前账号未绑定 Google' });
+    if (!user.password) return res.status(400).json({ error: '请先设置密码后再解绑 Google' });
+    await dbRun('UPDATE users SET google_id = NULL WHERE id = ?', [req.user.id]);
+    res.json({ message: 'Google 已解绑' });
+  } catch (err) {
+    console.error('[AUTH] 解绑 Google 错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+router.delete('/account', authenticateToken, async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    const user = await dbGet('SELECT id, password FROM users WHERE id = ?', [req.user.id]);
+    if (user?.password) {
+      if (!password) return res.status(400).json({ error: '请输入密码确认注销' });
+      const ok = await bcrypt.compare(password, user.password);
+      if (!ok) return res.status(401).json({ error: '密码错误' });
+    }
+    await dbRun('DELETE FROM users WHERE id = ?', [req.user.id]);
+    res.json({ message: '账号已注销' });
+  } catch (err) {
+    console.error('[AUTH] 注销账号错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
   }
 });
 

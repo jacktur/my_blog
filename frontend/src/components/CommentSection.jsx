@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getCommentsApi, createCommentApi, deleteCommentApi, getLikeCountApi, checkLikeStatusApi, likeArticleApi } from '../api';
+import { getCommentsApi, createCommentApi, deleteCommentApi, getLikeCountApi, checkLikeStatusApi, likeArticleApi, reportApi } from '../api';
 import { MessageSquare, ThumbsUp, Send, Trash2 } from 'lucide-react';
 import { useXpNotification } from './XPNotification';
 import { getAvatarUrl, getDisplayName } from '../utils/displayName';
+import ReportDialog from './ReportDialog';
+import { useConfirm } from './ConfirmDialog';
 
 export default function CommentSection({ articleId }) {
   const { user } = useAuth();
+  const confirm = useConfirm();
   const { notifyGamification } = useXpNotification();
   const [comments, setComments] = useState([]);
   const [commentsLoading, setCommentsLoading] = useState(true);
@@ -16,22 +19,32 @@ export default function CommentSection({ articleId }) {
   const [likeCount, setLikeCount] = useState(0);
   const [remainingLikes, setRemainingLikes] = useState(5);
   const [liking, setLiking] = useState(false);
+  const [reportTargetId, setReportTargetId] = useState(null);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
-  const loadData = useCallback(async () => {
-    try {
-      const [cRes, lRes] = await Promise.all([getCommentsApi(articleId), getLikeCountApi(articleId)]);
-      setComments(cRes.data.comments);
-      setLikeCount(lRes.data.likes);
-    } catch {} finally { setCommentsLoading(false); }
+  const loadData = useCallback(() => {
+    Promise.all([getCommentsApi(articleId), getLikeCountApi(articleId)])
+      .then(([cRes, lRes]) => {
+        setComments(cRes.data.comments);
+        setLikeCount(lRes.data.likes);
+      })
+      .catch(() => undefined)
+      .finally(() => setCommentsLoading(false));
   }, [articleId]);
 
-  const checkLikes = useCallback(async () => {
+  const checkLikes = useCallback(() => {
     if (!user) return;
-    try { const r = await checkLikeStatusApi(articleId); setRemainingLikes(r.data.remainingLikes); } catch {}
+    checkLikeStatusApi(articleId)
+      .then((r) => setRemainingLikes(r.data.remainingLikes))
+      .catch(() => undefined);
   }, [articleId, user]);
 
-  useEffect(() => { loadData(); }, [loadData]);
-  useEffect(() => { checkLikes(); }, [checkLikes]);
+  useEffect(() => {
+    Promise.resolve().then(loadData);
+  }, [loadData]);
+  useEffect(() => {
+    Promise.resolve().then(checkLikes);
+  }, [checkLikes]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,9 +62,32 @@ export default function CommentSection({ articleId }) {
   };
 
   const handleDelete = async (commentId) => {
-    if (!window.confirm('确定删除？')) return;
+    const ok = await confirm({
+      title: '删除评论',
+      message: '确定删除这条评论？此操作不可撤销。',
+      confirmText: '删除',
+      danger: true,
+    });
+    if (!ok) return;
     try { await deleteCommentApi(articleId, commentId); setComments((prev) => prev.filter((c) => c.id !== commentId)); }
     catch (err) { alert(err.response?.data?.error || '删除失败'); }
+  };
+
+  const handleReport = async (commentId) => {
+    if (!user) { alert('请先登录'); return; }
+    setReportTargetId(commentId);
+  };
+
+  const submitReport = async ({ reason, details }) => {
+    if (!reportTargetId) return;
+    setReportSubmitting(true);
+    try {
+      await reportApi({ targetType: 'comment', targetId: reportTargetId, reason, details });
+      setReportTargetId(null);
+      alert('举报已提交');
+    }
+    catch (err) { alert(err.response?.data?.error || '举报失败'); }
+    finally { setReportSubmitting(false); }
   };
 
   const handleLike = async () => {
@@ -63,7 +99,9 @@ export default function CommentSection({ articleId }) {
       setLikeCount(r.data.likes);
       setRemainingLikes(r.data.remainingLikes);
       notifyGamification(r.data.gamification?.self);
-    } catch {} finally { setLiking(false); }
+    } catch {
+      alert('点赞失败');
+    } finally { setLiking(false); }
   };
 
   const formatDate = (dateStr) => {
@@ -73,6 +111,13 @@ export default function CommentSection({ articleId }) {
 
   return (
     <div id="comments" className="mt-10 pt-8 border-t border-app-border">
+      <ReportDialog
+        open={!!reportTargetId}
+        title="举报评论"
+        submitting={reportSubmitting}
+        onClose={() => setReportTargetId(null)}
+        onSubmit={submitReport}
+      />
       {/* Like button */}
       <div className="flex items-center gap-4 mb-6 pb-6 border-b border-app-border">
         <button onClick={handleLike} disabled={liking || remainingLikes <= 0}
@@ -114,11 +159,16 @@ export default function CommentSection({ articleId }) {
                   <span className="text-xs font-medium text-app-text">{getDisplayName(c)}</span>
                   <span className="text-[10px] text-app-subtext">{formatDate(c.created_at)}</span>
                 </Link>
-                {user && user.id === c.user_id && (
-                  <button onClick={() => handleDelete(c.id)} className="text-app-subtext hover:text-app-red transition-colors">
-                    <Trash2 size={12} />
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {user && user.id !== c.user_id && (
+                    <button onClick={() => handleReport(c.id)} className="text-[10px] text-app-subtext hover:text-app-orange transition-colors">举报</button>
+                  )}
+                  {user && user.id === c.user_id && (
+                    <button onClick={() => handleDelete(c.id)} className="text-app-subtext hover:text-app-red transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
               <p className="text-sm text-app-text leading-relaxed">{c.content}</p>
             </div>

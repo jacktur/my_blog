@@ -1,6 +1,28 @@
 # My Blog
 
-一个极客风格的个人博客系统，前端使用 React + Vite，后端使用 Express，数据存储使用 SQLite。项目支持文章发布、评论、标签、用户登录注册、关注、通知、收藏、阅读进度、成就系统、草稿、系列文章、私信和图片上传等功能。
+一个极客风格的个人博客系统，前端使用 React + Vite，后端使用 Express，数据存储使用 SQLite。项目支持文章发布、评论、标签、用户登录注册、关注、通知、收藏、阅读进度、成就系统、草稿、系列文章、私信、图片上传、举报屏蔽、账号安全和内容审核等功能。
+
+## version4.0 更新
+
+- 新增站长后台的举报处理、内容审核、软删除恢复、用户封禁/解封和统计视图
+- 新增文章、评论、用户举报能力，并加入用户屏蔽后的私信限制
+- 新增 WebSocket 私信实时推送，保留轮询兜底
+- 新增草稿箱、系列列表、系列详情和我的系列管理页面
+- 强化账号安全，支持会话记录、退出所有设备、修改密码后旧 Token 失效和账号注销
+- 优化移动端底部导航、首页信息流、侧边栏、设置页和多个空状态/确认弹窗体验
+
+## 当前功能
+
+- 文章：发布、编辑、删除、封面图、Markdown 预览、标签、摘要、阅读时间、阅读进度、浏览统计、热门排序和分页加载
+- 写作：草稿箱、保存草稿、继续编辑草稿、发布草稿、加入系列、图片/链接快捷写作、离开页面未保存提醒
+- 搜索：关键词搜索、标签筛选、作者筛选、最新/热度排序、关键词高亮和加载更多
+- 互动：评论、点赞、收藏、关注、通知、私信、WebSocket 实时消息和轮询兜底
+- 用户：注册登录、Google 登录、个人资料、头像、修改密码、退出所有设备、设备记录、解绑 Google、注销账号、浅色/深色主题切换
+- 社区安全：举报文章/评论/用户，屏蔽用户，屏蔽后双方不能创建会话或发送私信
+- 站长后台：用户封禁/解封、文章/评论/私信审核删除、举报处理、审核日志、软删除恢复、内容统计
+- 系列：公开系列列表、系列详情、我的系列管理、添加/移除系列文章
+- 移动端：底部导航覆盖首页、发现、写作、私信和个人页
+- 游戏化：XP、等级、签到、排行榜、成就中心和成就解锁提示
 
 ## 技术栈
 
@@ -88,7 +110,7 @@ copy backend\.env.example backend\.env
 开发默认配置：
 
 ```env
-JWT_SECRET=dev_jwt_secret
+JWT_SECRET=replace_with_a_long_random_secret
 PORT=3001
 NODE_ENV=development
 ```
@@ -97,7 +119,10 @@ NODE_ENV=development
 
 - `master / 123456`
 - `robot7 / 123456`
+- `admin / 12345678`
 - `robot7` 固定拥有 3 篇测试文章，点赞数分别为 20、10、0，并写入对应测试成就
+
+`admin` 是开发环境的站长账号，可进入 `/admin` 验证内容审核、举报处理、封禁用户和恢复误删内容等流程。
 
 这个 seed 是幂等的，重复启动不会无限复制文章或点赞，适合每次切换到新 worktree 后直接作为项目测试环境使用。
 
@@ -137,6 +162,7 @@ cd ..
 
 ```bash
 cd backend
+export JWT_SECRET="替换为强随机字符串"
 NODE_ENV=production node server.js
 ```
 
@@ -144,11 +170,13 @@ Windows PowerShell：
 
 ```powershell
 cd backend
+$env:JWT_SECRET="替换为强随机字符串"
 $env:NODE_ENV="production"
 node server.js
 ```
 
 生产模式下，后端会托管 `frontend/dist`，并支持前端 SPA 路由。
+生产环境会拒绝缺失的 `JWT_SECRET`，也会拒绝默认开发密钥；不要复用开发环境的 `backend/.env`。
 
 ## 当前 VPS 状态
 
@@ -171,8 +199,8 @@ ssh aws-ubuntu
 - Nginx 配置：`/etc/nginx/sites-available/myblog`
 - Nginx 已启用配置：`/etc/nginx/sites-enabled/myblog`
 - 当前 Nginx 状态：active
-- 当前 PM2 状态：已安装，但没有管理 `my_blog` 进程
-- 当前 Node 进程：`node /var/www/my_blog/backend/server.js`
+- 当前 PM2 状态：`root` 用户下的 `myblog` 进程在线，已执行 `pm2 save`
+- 当前 Node 进程：PM2 管理的 `node /var/www/my_blog/backend/server.js`
 
 当前 Nginx 将这些路径代理到后端：
 
@@ -216,17 +244,24 @@ sudo cat /etc/nginx/sites-available/myblog
 
 ### 查看日志
 
-如果后端不是 PM2 或 systemd 管理，日志可能只在启动它的终端里。建议后续改为 PM2 管理：
+当前后端由 `root` 用户下的 PM2 进程 `myblog` 管理：
 
 ```bash
 cd /var/www/my_blog/backend
-sudo pm2 start server.js --name my-blog
-sudo pm2 save
-pm2 status
-pm2 logs my-blog
+sudo pm2 status
+sudo pm2 logs myblog
 ```
 
-如果使用当前直接启动方式，可以先找到进程：
+如果需要重建 PM2 进程：
+
+```bash
+cd /var/www/my_blog/backend
+sudo pm2 delete myblog
+sudo env NODE_ENV=production pm2 start server.js --name myblog
+sudo pm2 save
+```
+
+也可以用进程列表确认当前监听者：
 
 ```bash
 ps -eo pid,ppid,user,args | grep node | grep my_blog
@@ -247,13 +282,15 @@ sudo npm install
 sudo npm run build
 ```
 
-更新后重启后端。如果已经改用 PM2：
+更新后重启后端：
 
 ```bash
-sudo pm2 restart my-blog
+cd /var/www/my_blog/backend
+sudo env NODE_ENV=production pm2 restart myblog --update-env
+sudo pm2 save
 ```
 
-如果仍是直接 Node 进程，先找到旧进程并停止，再重新启动：
+如果临时脱离 PM2 直接排查，可以先找到旧进程并停止，再重新启动：
 
 ```bash
 ps -eo pid,ppid,user,args | grep node | grep my_blog
@@ -261,8 +298,6 @@ sudo kill <PID>
 cd /var/www/my_blog/backend
 sudo NODE_ENV=production node server.js
 ```
-
-更推荐改为 PM2，避免关闭 SSH 后服务不可控。
 
 ## VPS 首次部署参考
 
@@ -301,6 +336,15 @@ CORS_ORIGIN=https://你的域名
 - 上传目录：`backend/uploads/`
 - 头像上传：`backend/uploads/avatars/custom/`
 - 文章封面：`backend/uploads/covers/`
+
+数据库会在启动时自动创建和迁移这些核心表：
+
+- 内容：`articles`、`comments`、`tags`、`article_tags`、`drafts`、`series`、`series_articles`
+- 用户与互动：`users`、`follows`、`likes`、`bookmarks`、`notifications`、`reading_progress`
+- 游戏化：`xp_transactions`、`achievements`、`user_achievements`、`activity_feed`
+- 私信与安全：`conversations`、`messages`、`conversation_readers`、`blocked_users`、`reports`、`moderation_actions`、`auth_sessions`
+
+管理员删除文章、评论和私信时默认是软删除，会写入 `moderation_actions`，可在后台审核日志中恢复。
 
 这些文件通常不应该直接提交到 GitHub。部署或迁移服务器时，要记得备份数据库和上传目录。
 
@@ -401,6 +445,11 @@ cd frontend && npm run preview
 - 生产环境建议使用 PM2 或 systemd 管理 Node 服务
 - 使用 Nginx 代理域名和 HTTPS
 - 修改后端代码后需要重启 Node 服务
+- 生产环境要替换开发账号密码，尤其是 `admin / 12345678`
+- 不要把本地开发数据库 `backend/blog.sqlite` 原样当生产库使用，除非已经替换所有开发账号密码
+- 账号安全依赖 `users.token_version`，修改密码或退出所有设备会让旧 JWT 失效
+- WebSocket 使用 `/ws?token=<JWT>`，开发环境 Vite 已代理 `/ws` 到后端
+- 后台审核删除是软删除；真正清理数据库前先确认不需要恢复
 
 ## License
 

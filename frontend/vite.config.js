@@ -8,7 +8,18 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3001',
       '/auth': 'http://localhost:3001',
-      '/uploads': 'http://localhost:3001'
+      '/uploads': 'http://localhost:3001',
+      '/ws': {
+        target: 'ws://localhost:3001',
+        ws: true,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            if (err?.code === 'ECONNRESET' || err?.code === 'ECONNABORTED') return
+            console.warn('[vite] ws proxy error:', err?.message || err)
+          })
+        }
+      }
     }
   }
 })

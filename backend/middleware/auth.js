@@ -1,11 +1,15 @@
 const jwt = require('jsonwebtoken');
-const { dbGet } = require('../database');
+const { dbGet, dbRun } = require('../database');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const isProduction = process.env.NODE_ENV === 'production';
 
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET is not configured. Copy backend/.env.example to backend/.env and set JWT_SECRET.');
+}
+if (isProduction && JWT_SECRET === 'dev_jwt_secret') {
+  throw new Error('JWT_SECRET must be changed before running in production.');
 }
 
 /**
@@ -27,7 +31,7 @@ function authenticateToken(req, res, next) {
 
     try {
       const currentUser = await dbGet(
-        "SELECT id, username, role, status FROM users WHERE id = ?",
+        "SELECT id, username, role, status, COALESCE(token_version, 0) as token_version FROM users WHERE id = ?",
         [user.id]
       );
       if (!currentUser) {
@@ -35,6 +39,23 @@ function authenticateToken(req, res, next) {
       }
       if (currentUser.status === 'banned') {
         return res.status(403).json({ error: '账号已被封禁' });
+      }
+      if ((user.tokenVersion || 0) !== (currentUser.token_version || 0)) {
+        return res.status(401).json({ error: '令牌已失效，请重新登录' });
+      }
+      if (user.sessionId) {
+        const session = await dbGet(
+          `SELECT id FROM auth_sessions
+           WHERE id = ? AND user_id = ? AND revoked_at IS NULL AND token_version = ?`,
+          [user.sessionId, currentUser.id, currentUser.token_version || 0]
+        );
+        if (!session) {
+          return res.status(401).json({ error: '会话已失效，请重新登录' });
+        }
+        await dbRun(
+          "UPDATE auth_sessions SET last_seen_at = datetime('now') WHERE id = ?",
+          [user.sessionId]
+        );
       }
       req.user = currentUser;
       next();
@@ -59,7 +80,13 @@ function requireAdmin(req, res, next) {
  */
 function generateToken(user) {
   return jwt.sign(
-    { id: user.id, username: user.username, role: user.role || 'user' },
+    {
+      id: user.id,
+      username: user.username,
+      role: user.role || 'user',
+      tokenVersion: user.token_version || 0,
+      sessionId: user.session_id || user.sessionId || null,
+    },
     JWT_SECRET,
     { expiresIn: '7d' }
   );

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, AtSign, KeyRound, Mail, ShieldCheck, UserRound } from 'lucide-react';
-import { getGoogleAuthUrl, registerApi, sendRegisterCodeApi } from '../api';
+import { getAuthConfigApi, getGoogleAuthUrl, registerApi, sendRegisterCodeApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -16,8 +16,13 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [authConfig, setAuthConfig] = useState({ smtpConfigured: true, googleConfigured: true });
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    getAuthConfigApi().then(res => setAuthConfig(res.data)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!cooldown) return undefined;
@@ -48,11 +53,12 @@ export default function Register() {
 
     setSendingCode(true);
     try {
+      if (!authConfig.smtpConfigured) throw new Error('SMTP_NOT_CONFIGURED');
       await sendRegisterCodeApi(cleanEmail);
       setNotice('验证码已发送，请查看邮箱');
       setCooldown(60);
     } catch (err) {
-      setError(err.response?.data?.error || '验证码发送失败');
+      setError(err.message === 'SMTP_NOT_CONFIGURED' ? '邮箱验证码未配置，请联系站长' : (err.response?.data?.error || '验证码发送失败'));
     } finally {
       setSendingCode(false);
     }
@@ -98,13 +104,14 @@ export default function Register() {
 
         <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-app-border bg-white p-5 shadow-card">
           <a
-            href={getGoogleAuthUrl()}
+            href={authConfig.googleConfigured ? getGoogleAuthUrl() : undefined}
+            onClick={(e) => { if (!authConfig.googleConfigured) e.preventDefault(); }}
             className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-app-border bg-white text-sm font-semibold text-app-text transition-colors hover:bg-app-bg"
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-full border border-app-border text-xs font-bold text-app-blue">
               G
             </span>
-            使用 Google 注册 / 登录
+            {authConfig.googleConfigured ? '使用 Google 注册 / 登录' : 'Google 登录未配置'}
           </a>
 
           <div className="flex items-center gap-3">
@@ -180,10 +187,10 @@ export default function Register() {
               <button
                 type="button"
                 onClick={handleSendCode}
-                disabled={sendingCode || cooldown > 0}
+                disabled={!authConfig.smtpConfigured || sendingCode || cooldown > 0}
                 className="h-11 min-w-[112px] rounded-xl border border-app-border bg-white px-3 text-sm font-semibold text-app-text transition-colors hover:bg-app-bg disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {sendingCode ? '发送中' : cooldown > 0 ? `${cooldown}s` : '发送验证码'}
+                {!authConfig.smtpConfigured ? '未配置' : sendingCode ? '发送中' : cooldown > 0 ? `${cooldown}s` : '发送验证码'}
               </button>
             </div>
           </div>

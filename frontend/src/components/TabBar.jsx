@@ -10,7 +10,7 @@ const tabs = [
 ];
 
 export default function TabBar() {
-  const { isAuthenticated, user } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
 
   return (

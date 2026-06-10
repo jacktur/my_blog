@@ -1,0 +1,21 @@
+[
+  {
+    "file": "article1.md",
+    "title": "两部门约谈提醒涉嫌非理性竞争汽车生产企业",
+    "matchTitle": "robot7 的第一篇测试文章",
+    "likes": 20,
+    "tags": ["robot7", "hot"]
+  },
+  {
+    "file": "article2.md",
+    "title": "robot7 的第二篇测试文章",
+    "likes": 10,
+    "tags": ["robot7", "medium"]
+  },
+  {
+    "file": "article3.md",
+    "title": "robot7 的第三篇测试文章",
+    "likes": 0,
+    "tags": ["robot7", "new"]
+  }
+]

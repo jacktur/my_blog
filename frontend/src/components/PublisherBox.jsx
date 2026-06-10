@@ -9,31 +9,31 @@ export default function PublisherBox() {
   if (!isAuthenticated) return null;
 
   return (
-    <div className="card p-4 mb-3">
+    <div className="mb-3 rounded-xl border border-app-border bg-app-card p-3 shadow-card sm:p-4">
       <button
         onClick={() => navigate('/create')}
-        className="w-full text-left flex items-center gap-3 text-app-subtext hover:text-app-text transition-colors"
+        className="flex w-full items-center gap-3 rounded-lg bg-app-bg px-3 py-3 text-left text-app-subtext transition-colors hover:text-app-text"
       >
-        <div className="w-9 h-9 rounded-full bg-app-bg flex items-center justify-center">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-app-card ring-1 ring-app-border">
           <PenLine size={16} className="text-app-blue" />
         </div>
-        <span className="text-sm">有什么新鲜事想分享给大家？</span>
+        <span className="text-sm">写下新的技术笔记、项目记录或想法</span>
       </button>
 
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-app-border">
+      <div className="mt-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-1">
-          <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-app-subtext hover:bg-app-bg hover:text-app-blue transition-colors">
+          <button onClick={() => navigate('/create?quick=image')} className="flex h-8 items-center gap-1 rounded-lg px-3 text-xs text-app-subtext transition-colors hover:bg-app-bg hover:text-app-blue">
             <Image size={15} />
             <span>图片</span>
           </button>
-          <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-app-subtext hover:bg-app-bg hover:text-app-blue transition-colors">
+          <button onClick={() => navigate('/create?quick=link')} className="flex h-8 items-center gap-1 rounded-lg px-3 text-xs text-app-subtext transition-colors hover:bg-app-bg hover:text-app-blue">
             <Link2 size={15} />
             <span>链接</span>
           </button>
         </div>
         <button
           onClick={() => navigate('/create')}
-          className="flex items-center gap-1 px-4 py-1.5 rounded-full bg-app-blue text-white text-xs font-medium hover:bg-app-blue/90 transition-colors"
+          className="flex h-8 items-center gap-1 rounded-lg bg-app-blue px-4 text-xs font-medium text-white transition-colors hover:bg-app-blue/90"
         >
           <PenLine size={13} />
           发布文章

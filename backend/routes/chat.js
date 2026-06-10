@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { dbGet, dbRun, dbAll } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { sendToUser } = require('../realtime');
 
 /**
  * GET /api/conversations
@@ -30,6 +31,7 @@ router.get('/', authenticateToken, async (req, res) => {
          WHERE m.conversation_id = c.id
            AND m.created_at > COALESCE(cr.last_read_at, '1970-01-01')
            AND m.sender_id != ?
+           AND m.deleted_at IS NULL
         ) as unread_count
       FROM conversations c
       JOIN users u ON u.id = CASE WHEN c.participant1_id = ? THEN c.participant2_id ELSE c.participant1_id END
@@ -67,6 +69,12 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const targetUser = await dbGet('SELECT id FROM users WHERE id = ?', [targetUserId]);
     if (!targetUser) return res.status(404).json({ error: '用户不存在' });
+    const blocked = await dbGet(
+      `SELECT blocker_id FROM blocked_users
+       WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)`,
+      [userId, targetUserId, targetUserId, userId]
+    );
+    if (blocked) return res.status(403).json({ error: '双方存在屏蔽关系，无法创建会话' });
 
     const p1 = Math.min(userId, targetUserId);
     const p2 = Math.max(userId, targetUserId);
@@ -124,12 +132,13 @@ router.get('/:id/messages', authenticateToken, async (req, res) => {
       FROM messages m
       JOIN users u ON u.id = m.sender_id
       WHERE m.conversation_id = ?
+        AND m.deleted_at IS NULL
       ORDER BY m.created_at DESC
       LIMIT ? OFFSET ?
     `, [conversationId, limit, offset]);
 
     const totalRow = await dbGet(
-      'SELECT COUNT(*) as total FROM messages WHERE conversation_id = ?',
+      'SELECT COUNT(*) as total FROM messages WHERE conversation_id = ? AND deleted_at IS NULL',
       [conversationId]
     );
 
@@ -166,6 +175,13 @@ router.post('/:id/messages', authenticateToken, async (req, res) => {
       [conversationId, userId, userId]
     );
     if (!conv) return res.status(403).json({ error: '无权发言' });
+    const otherUserId = conv.participant1_id === userId ? conv.participant2_id : conv.participant1_id;
+    const blocked = await dbGet(
+      `SELECT blocker_id FROM blocked_users
+       WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)`,
+      [userId, otherUserId, otherUserId, userId]
+    );
+    if (blocked) return res.status(403).json({ error: '双方存在屏蔽关系，无法发送私信' });
 
     const result = await dbRun(
       'INSERT INTO messages (conversation_id, sender_id, content) VALUES (?, ?, ?)',
@@ -182,7 +198,6 @@ router.post('/:id/messages', authenticateToken, async (req, res) => {
       [conversationId, userId]
     );
 
-    const otherUserId = conv.participant1_id === userId ? conv.participant2_id : conv.participant1_id;
     await dbRun(
       'INSERT OR IGNORE INTO conversation_readers (conversation_id, user_id) VALUES (?, ?)',
       [conversationId, otherUserId]
@@ -194,6 +209,8 @@ router.post('/:id/messages', authenticateToken, async (req, res) => {
        FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?`,
       [result.lastID]
     );
+    sendToUser(otherUserId, { type: 'message', conversationId, message });
+    sendToUser(userId, { type: 'message_sent', conversationId, message });
 
     res.status(201).json({ message });
   } catch (err) {

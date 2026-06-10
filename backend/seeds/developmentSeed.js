@@ -1,37 +1,53 @@
+const fs = require('fs/promises');
+const path = require('path');
 const bcrypt = require('bcryptjs');
 const { calculateReadTime } = require('../utils/calculateReadTime');
 
-const ROBOT7_ARTICLES = [
-  {
-    title: 'robot7 的第一篇测试文章',
-    likes: 20,
-    tags: ['robot7', 'hot'],
-    content: `# robot7 的第一篇测试文章
+const ARTICLE_SEED_DIR = path.join(__dirname, 'articles');
+const ARTICLE_MANIFEST_PATH = path.join(ARTICLE_SEED_DIR, 'manifest.json');
 
-这篇文章用于开发环境验证首页、作者头像、点赞数量和成就状态。
+/*
+ * 开发环境文章正文拆分到 backend/seeds/articles/*.md，元数据放在 manifest.json：
+ * - 避免 developmentSeed.js 随测试文章增多而变成难维护的大文件。
+ * - 新增测试文章时，复制一个 Markdown 文件，并在 manifest.json 添加 file/title/tags/likes。
+ * - 如果要替换已有测试文章标题，给 manifest 项增加 matchTitle 指向旧标题，避免重复插入。
+ * - 日常理解 Seed 结构优先看本文件和 manifest.json，不需要打开所有长篇 Markdown。
+ * - 重新执行 Seed：以 NODE_ENV=development 启动后端，或重启开发后端触发 seedDevelopmentData。
+ */
+function validateArticleSeedMeta(item, index) {
+  const label = `articles manifest 第 ${index + 1} 项`;
+  if (!item || typeof item !== 'object') throw new Error(`${label} 不合法`);
+  if (!item.file || typeof item.file !== 'string' || !item.file.endsWith('.md')) {
+    throw new Error(`${label} 缺少合法 file`);
+  }
+  if (item.file.includes('/') || item.file.includes('\\')) {
+    throw new Error(`${label} 的 file 只能是文件名`);
+  }
+  if (!item.title || typeof item.title !== 'string') throw new Error(`${label} 缺少 title`);
 
-它会被 seed 成 20 个点赞。
-`,
-  },
-  {
-    title: 'robot7 的第二篇测试文章',
-    likes: 10,
-    tags: ['robot7', 'medium'],
-    content: `# robot7 的第二篇测试文章
+  return {
+    file: item.file,
+    title: item.title,
+    matchTitle: typeof item.matchTitle === 'string' && item.matchTitle.trim() ? item.matchTitle.trim() : item.title,
+    likes: Number(item.likes || 0),
+    tags: Array.isArray(item.tags) ? item.tags.filter((tag) => typeof tag === 'string' && tag.trim()).map((tag) => tag.trim()) : [],
+  };
+}
 
-这篇文章用于验证 10 个点赞的文章卡片状态。
-`,
-  },
-  {
-    title: 'robot7 的第三篇测试文章',
-    likes: 0,
-    tags: ['robot7', 'new'],
-    content: `# robot7 的第三篇测试文章
+async function loadArticleSeeds() {
+  const manifestContent = await fs.readFile(ARTICLE_MANIFEST_PATH, 'utf8');
+  const manifest = JSON.parse(manifestContent);
+  if (!Array.isArray(manifest)) throw new Error('articles manifest 必须是数组');
 
-这篇文章用于验证 0 点赞文章的初始交互状态。
-`,
-  },
-];
+  const articles = [];
+  for (const [index, item] of manifest.entries()) {
+    const meta = validateArticleSeedMeta(item, index);
+    const fullPath = path.join(ARTICLE_SEED_DIR, meta.file);
+    const markdown = await fs.readFile(fullPath, 'utf8');
+    articles.push({ ...meta, content: markdown.trimStart() });
+  }
+  return articles;
+}
 
 async function ensureUser(dbGet, dbRun, username, password, nickname, avatar = 'default-1', options = {}) {
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -57,14 +73,14 @@ async function ensureUser(dbGet, dbRun, username, password, nickname, avatar = '
 
 async function ensureArticle(dbGet, dbRun, userId, article) {
   const existing = await dbGet(
-    'SELECT id FROM articles WHERE user_id = ? AND title = ?',
-    [userId, article.title]
+    'SELECT id FROM articles WHERE user_id = ? AND title IN (?, ?)',
+    [userId, article.title, article.matchTitle || article.title]
   );
 
   if (existing) {
     await dbRun(
-      'UPDATE articles SET content = ?, read_time = ?, cover_image = NULL WHERE id = ?',
-      [article.content, calculateReadTime(article.content), existing.id]
+      'UPDATE articles SET title = ?, content = ?, read_time = ?, cover_image = NULL WHERE id = ?',
+      [article.title, article.content, calculateReadTime(article.content), existing.id]
     );
     return existing.id;
   }
@@ -128,8 +144,9 @@ async function seedDevelopmentData({ dbGet, dbRun }) {
   await ensureUser(dbGet, dbRun, 'admin', '12345678', '站长', 'default-1', { role: 'admin' });
   const masterId = await ensureUser(dbGet, dbRun, 'master', '123456', 'Master');
   const robot7Id = await ensureUser(dbGet, dbRun, 'robot7', '123456', 'robot7', 'default-7');
+  const robot7Articles = await loadArticleSeeds();
 
-  for (const article of ROBOT7_ARTICLES) {
+  for (const article of robot7Articles) {
     const articleId = await ensureArticle(dbGet, dbRun, robot7Id, article);
     await ensureTags(dbGet, dbRun, articleId, article.tags);
     await ensureLikes(dbGet, dbRun, articleId, article.likes);

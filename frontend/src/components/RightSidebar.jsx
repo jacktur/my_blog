@@ -1,18 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { getTagsApi } from '../api';
+import { Link, useNavigate } from 'react-router-dom';
+import { followUserApi, getRecommendedUsersApi, getTagsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, UserPlus } from 'lucide-react';
-
-const mockUsers = [
-  { id: 1, username: '前端达人', bio: '热爱前端开发', avatar: null },
-  { id: 2, username: '后端忍者', bio: 'Go & Rust 爱好者', avatar: null },
-  { id: 3, username: '设计师小王', bio: 'UI/UX 设计分享', avatar: null },
-];
+import { Bookmark, FileText, Hash, LayoutDashboard, UserCheck, UserPlus } from 'lucide-react';
 
 export default function RightSidebar() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
   const [tags, setTags] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [followingId, setFollowingId] = useState(null);
 
   useEffect(() => {
     getTagsApi()
@@ -20,12 +17,42 @@ export default function RightSidebar() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    getRecommendedUsersApi(user?.id)
+      .then((res) => setUsers(res.data.users || []))
+      .catch(() => {});
+  }, [user?.id]);
+
+  const getAvatarUrl = (avatar) => {
+    if (!avatar) return '/uploads/avatars/defaults/default-1.svg';
+    if (avatar.startsWith('custom/')) return `/uploads/avatars/${avatar}`;
+    return `/uploads/avatars/defaults/${avatar}.svg`;
+  };
+
+  const handleFollow = async (targetUserId) => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    setFollowingId(targetUserId);
+    try {
+      await followUserApi(targetUserId);
+      setUsers((prev) => prev.map((item) => (
+        item.id === targetUserId ? { ...item, is_following: 1 } : item
+      )));
+    } catch {
+      return undefined;
+    } finally {
+      setFollowingId(null);
+    }
+  };
+
   return (
-    <aside className="hidden xl:block w-72 shrink-0">
-      <div className="sticky top-14 space-y-4 py-3">
+    <aside className="hidden w-72 shrink-0 xl:block">
+      <div className="sticky top-16 space-y-3 py-2">
         {/* Trending topics */}
-        <div className="card p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-app-text mb-3">
+        <div className="rounded-xl border border-app-border bg-app-card p-4 shadow-card">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-app-text">
             <Hash size={15} className="text-app-blue" />
             热门话题
           </h3>
@@ -37,8 +64,8 @@ export default function RightSidebar() {
                 <Link
                   key={tag.id}
                   to={`/?tag=${encodeURIComponent(tag.name)}`}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all
-                    bg-app-bg text-app-subtext hover:bg-app-blue/10 hover:text-app-blue"
+                  className="inline-flex items-center gap-1 rounded-lg bg-app-bg px-2.5 py-1.5 text-xs font-medium
+                    text-app-subtext transition-all hover:bg-app-blue/10 hover:text-app-blue"
                 >
                   #{tag.name}
                   <span className="opacity-60">({tag.article_count})</span>
@@ -49,48 +76,73 @@ export default function RightSidebar() {
         </div>
 
         {/* Recommended users */}
-        <div className="card p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-app-text mb-3">
+        <div className="rounded-xl border border-app-border bg-app-card p-4 shadow-card">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-app-text">
             <UserPlus size={15} className="text-app-blue" />
             可能感兴趣的人
           </h3>
+          {users.length === 0 ? (
+            <p className="text-app-subtext text-xs">暂无推荐用户</p>
+          ) : (
           <div className="space-y-3">
-            {mockUsers.map((u) => (
-              <div key={u.id} className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-app-bg flex items-center justify-center text-app-subtext text-xs font-bold shrink-0">
-                  {u.username.charAt(0)}
+            {users.map((u) => (
+              <div key={u.id} className="flex items-center gap-3 rounded-lg p-1.5 transition-colors hover:bg-app-bg">
+                <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-app-bg">
+                  <img
+                    src={getAvatarUrl(u.avatar)}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.currentTarget.src = '/uploads/avatars/defaults/default-1.svg'; }}
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <Link
                     to={`/profile/${u.id}`}
                     className="text-sm font-medium text-app-text hover:text-app-blue transition-colors truncate block"
                   >
-                    {u.username}
+                    {u.nickname || u.username}
                   </Link>
-                  <p className="text-xs text-app-subtext truncate">{u.bio}</p>
+                  <p className="text-xs text-app-subtext truncate">
+                    {u.bio || `${u.article_count || 0} 篇文章 · ${u.follower_count || 0} 位粉丝`}
+                  </p>
                 </div>
-                <button className="text-xs text-app-blue font-medium hover:opacity-80 transition-opacity shrink-0">
-                  关注
+                <button
+                  onClick={() => handleFollow(u.id)}
+                  disabled={followingId === u.id || !!u.is_following}
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-opacity disabled:cursor-default disabled:opacity-70
+                    ${u.is_following ? 'border border-app-border text-app-subtext' : 'bg-app-blue/10 text-app-blue hover:opacity-80'}`}
+                >
+                  {u.is_following ? <><UserCheck size={12} />已关注</> : followingId === u.id ? '关注中' : '关注'}
                 </button>
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Quick links */}
         {isAuthenticated && (
-          <div className="card p-4 space-y-2">
+          <div className="rounded-xl border border-app-border bg-app-card p-2 shadow-card">
             <Link
               to="/dashboard"
-              className="block text-sm text-app-subtext hover:text-app-blue transition-colors"
+              className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-app-subtext transition-colors hover:bg-app-bg hover:text-app-blue"
             >
+              <LayoutDashboard size={15} />
               控制台
             </Link>
             <Link
               to="/reading-list"
-              className="block text-sm text-app-subtext hover:text-app-blue transition-colors"
+              className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-app-subtext transition-colors hover:bg-app-bg hover:text-app-blue"
             >
+              <Bookmark size={15} />
               收藏列表
+            </Link>
+            <Link
+              to="/drafts"
+              className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-app-subtext transition-colors hover:bg-app-bg hover:text-app-blue"
+            >
+              <FileText size={15} />
+              草稿箱
             </Link>
           </div>
         )}

@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, Image, Loader2, X } from 'lucide-react';
+import { Image, Loader2, X } from 'lucide-react';
 import { uploadCoverApi } from '../api';
 
 export default function CoverImageUploader({ currentImage, onImageChange }) {

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowRight, KeyRound, Mail, ShieldCheck, UserRound } from 'lucide-react';
-import { getGoogleAuthUrl, loginApi } from '../api';
+import { getAuthConfigApi, getGoogleAuthUrl, loginApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -10,8 +10,13 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [searchParams] = useSearchParams();
   const [error, setError] = useState(() => searchParams.get('error') || '');
+  const [authConfig, setAuthConfig] = useState({ googleConfigured: true });
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    getAuthConfigApi().then(res => setAuthConfig(res.data)).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,7 +30,7 @@ export default function Login() {
     try {
       const res = await loginApi(id, pwd);
       login(res.data.user, res.data.token);
-      navigate('/');
+      navigate(res.data.user?.role === 'admin' ? '/admin' : '/');
     } catch (err) {
       setError(err.response?.data?.error || '登录失败');
     } finally {
@@ -46,13 +51,14 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-app-border bg-white p-5 shadow-card">
           <a
-            href={getGoogleAuthUrl()}
+            href={authConfig.googleConfigured ? getGoogleAuthUrl() : undefined}
+            onClick={(e) => { if (!authConfig.googleConfigured) e.preventDefault(); }}
             className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-app-border bg-white text-sm font-semibold text-app-text transition-colors hover:bg-app-bg"
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-full border border-app-border text-xs font-bold text-app-blue">
               G
             </span>
-            使用 Google 登录
+            {authConfig.googleConfigured ? '使用 Google 登录' : 'Google 登录未配置'}
           </a>
 
           <div className="flex items-center gap-3">

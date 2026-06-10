@@ -25,14 +25,16 @@ export default function BookmarkButton({ articleId }) {
         setBookmarked(true);
         notifyGamification(res.data.gamification);
       }
-    } catch {}
+    } catch {
+      alert('收藏操作失败');
+    }
     finally { setLoading(false); }
   };
 
   return (
     <button onClick={handleToggle} disabled={loading}
-      className={`p-1.5 rounded-full transition-colors disabled:opacity-50 ${
-        bookmarked ? 'text-app-orange bg-app-orange/8' : 'text-app-subtext hover:text-app-orange hover:bg-app-orange/5'
+      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+        bookmarked ? 'text-app-orange bg-app-orange/10' : 'text-app-subtext hover:text-app-orange hover:bg-app-orange/5'
       }`}
       title={bookmarked ? '取消收藏' : '收藏'}>
       <Bookmark size={14} fill={bookmarked ? 'currentColor' : 'none'} />

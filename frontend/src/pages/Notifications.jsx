@@ -12,8 +12,6 @@ export default function Notifications() {
   const { isAuthenticated } = useAuth();
   const [filter, setFilter] = useState('all');
   const [notifications, setNotifications] = useState([]);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
 
   const fetchNotifications = useCallback(async (pageNum) => {
@@ -22,8 +20,9 @@ export default function Notifications() {
       const params = { page: pageNum }; if (filter === 'unread') params.type = 'unread';
       const res = await getNotificationsApi(params);
       setNotifications(res.data.notifications);
-      setPage(pageNum); setTotalPages(res.data.pagination.totalPages);
-    } catch {} finally { setLoading(false); }
+    } catch {
+      return undefined;
+    } finally { setLoading(false); }
   }, [filter]);
 
   useEffect(() => { fetchNotifications(1); }, [fetchNotifications]);

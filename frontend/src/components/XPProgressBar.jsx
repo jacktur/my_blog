@@ -1,6 +1,6 @@
 import { Cpu, TrendingUp } from 'lucide-react';
 
-export default function XPProgressBar({ xp, level, nextLevelXp, currentLevelXp, levelProgress, title, compact }) {
+export default function XPProgressBar({ xp, level, nextLevelXp, levelProgress, title, compact }) {
   const progress = Math.min(100, Math.max(0, levelProgress || 0));
 
   if (compact) {

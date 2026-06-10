@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, Heart, MessageCircle, Megaphone, Mail, CheckCheck } from 'lucide-react';
-import { getUnreadCountApi, getNotificationsApi, markAllNotificationsReadApi, getConversationsApi } from '../api';
+import { getUnreadCountApi, getNotificationsApi, markAllNotificationsReadApi, markNotificationReadApi, getConversationsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 
 const typeIcons = { like: Heart, comment: MessageCircle, system: Megaphone };
@@ -25,7 +25,9 @@ export default function NotificationDropdown() {
       setTotalUnread(unreadRes.data.totalUnread);
       setNotifications(notifRes.data.notifications);
       setRecentMessages(msgRes.data.conversations || []);
-    } catch {}
+    } catch {
+      return undefined;
+    }
   };
 
   useEffect(() => {
@@ -53,7 +55,9 @@ export default function NotificationDropdown() {
       await markAllNotificationsReadApi();
       setTotalUnread(prev => Math.max(0, prev - notifications.filter(n => !n.is_read).length));
       setNotifications([]);
-    } catch {}
+    } catch {
+      return undefined;
+    }
   };
 
   if (!isAuthenticated) return null;
@@ -92,7 +96,7 @@ export default function NotificationDropdown() {
                 {recentMessages.map((msg) => (
                   <Link
                     key={`msg-${msg.id}`}
-                    to="/chat"
+                    to={`/chat?conversation=${msg.id}`}
                     onClick={() => setOpen(false)}
                     className="flex items-start gap-3 px-4 py-2.5 hover:bg-app-bg transition-colors border-b border-app-border last:border-0"
                   >
@@ -131,7 +135,10 @@ export default function NotificationDropdown() {
                   <Link
                     key={n.id}
                     to={n.article_id ? `/article/${n.article_id}` : '#'}
-                    onClick={() => setOpen(false)}
+                    onClick={async () => {
+                      if (!n.is_read) await markNotificationReadApi(n.id).catch(() => {});
+                      setOpen(false);
+                    }}
                     className="flex items-start gap-3 px-4 py-2.5 hover:bg-app-bg transition-colors border-b border-app-border last:border-0"
                   >
                     <div className={`${color} mt-0.5`}><Icon size={16} /></div>

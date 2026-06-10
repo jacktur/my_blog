@@ -8,12 +8,12 @@ export default {
   theme: {
     extend: {
       colors: {
-        'app-bg': '#F2F3F5',
-        'app-card': '#FFFFFF',
-        'app-border': '#E5E5EA',
-        'app-text': '#1D1D1F',
-        'app-subtext': '#86868B',
-        'app-blue': '#007AFF',
+        'app-bg': 'var(--color-app-bg)',
+        'app-card': 'var(--color-app-card)',
+        'app-border': 'var(--color-app-border)',
+        'app-text': 'var(--color-app-text)',
+        'app-subtext': 'var(--color-app-subtext)',
+        'app-blue': 'var(--color-app-blue)',
         'app-red': '#FF3B30',
         'app-green': '#34C759',
         'app-orange': '#FF9500',

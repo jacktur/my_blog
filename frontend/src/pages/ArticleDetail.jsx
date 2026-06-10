@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getArticleApi, deleteArticleApi, followUserApi, unfollowUserApi, checkFollowStatusApi } from '../api';
+import { blockUserApi, getArticleApi, deleteArticleApi, followUserApi, reportApi, unfollowUserApi, checkFollowStatusApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -12,17 +12,22 @@ import BookmarkButton from '../components/BookmarkButton';
 import EnhancedCodeBlock from '../components/EnhancedCodeBlock';
 import { splitHtmlAtCodeBlocks } from '../utils/codeBlockEnhancer';
 import { getAvatarUrl, getDisplayName } from '../utils/displayName';
+import { useConfirm } from '../components/ConfirmDialog';
+import ReportDialog from '../components/ReportDialog';
 
 export default function ArticleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const confirm = useConfirm();
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [following, setFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
   const contentRef = useRef(null);
 
   useEffect(() => {
@@ -41,7 +46,8 @@ export default function ArticleDetail() {
   }, [article, user]);
 
   const handleDelete = async () => {
-    if (!window.confirm('确定删除这篇文章？')) return;
+    const ok = await confirm({ title: '删除文章', message: '确定删除这篇文章？', confirmText: '删除', danger: true });
+    if (!ok) return;
     setDeleting(true);
     try { await deleteArticleApi(id); navigate('/'); }
     catch { alert('删除失败'); }
@@ -56,6 +62,30 @@ export default function ArticleDetail() {
       else { await followUserApi(article.user_id); setFollowing(true); }
     } catch { alert('操作失败'); }
     finally { setFollowLoading(false); }
+  };
+
+  const handleReportArticle = async () => {
+    if (!user) return navigate('/login');
+    setReportOpen(true);
+  };
+
+  const submitReportArticle = async ({ reason, details }) => {
+    setReportSubmitting(true);
+    try {
+      await reportApi({ targetType: 'article', targetId: article.id, reason, details });
+      setReportOpen(false);
+      alert('举报已提交');
+    }
+    catch (err) { alert(err.response?.data?.error || '举报失败'); }
+    finally { setReportSubmitting(false); }
+  };
+
+  const handleBlockAuthor = async () => {
+    if (!user) return navigate('/login');
+    const ok = await confirm({ title: '屏蔽作者', message: '屏蔽后你们将无法互发私信。确定屏蔽该作者？', confirmText: '屏蔽', danger: true });
+    if (!ok) return;
+    try { await blockUserApi(article.user_id); alert('已屏蔽该用户'); }
+    catch (err) { alert(err.response?.data?.error || '屏蔽失败'); }
   };
 
   const formatDate = (dateStr) => {
@@ -103,6 +133,13 @@ export default function ArticleDetail() {
     <div className="min-h-screen bg-app-bg">
       <ReadingProgressBar articleId={id} />
       <TableOfContents contentRef={contentRef} />
+      <ReportDialog
+        open={reportOpen}
+        title="举报文章"
+        submitting={reportSubmitting}
+        onClose={() => setReportOpen(false)}
+        onSubmit={submitReportArticle}
+      />
 
       {/* Cover image */}
       {article.cover_image && (
@@ -154,6 +191,12 @@ export default function ArticleDetail() {
               >
                 {following ? <><UserCheck size={13} />已关注</> : <><UserPlus size={13} />关注</>}
               </button>
+            )}
+            {user && !isOwner && (
+              <>
+                <button onClick={handleReportArticle} className="px-2 py-1.5 rounded-full text-xs text-app-subtext hover:text-app-orange hover:bg-app-bg transition-colors">举报</button>
+                <button onClick={handleBlockAuthor} className="px-2 py-1.5 rounded-full text-xs text-app-subtext hover:text-app-red hover:bg-red-50 transition-colors">屏蔽</button>
+              </>
             )}
             <BookmarkButton articleId={article.id} />
             {isOwner && (

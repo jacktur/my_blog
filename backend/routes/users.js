@@ -60,6 +60,35 @@ router.get('/profile', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/users/recommended
+ * 获取真实用户推荐列表
+ */
+router.get('/recommended', async (req, res) => {
+  try {
+    const excludeId = parseInt(req.query.exclude, 10) || 0;
+    const users = await dbAll(
+      `SELECT u.id, u.username, u.nickname, u.bio, u.avatar,
+              (SELECT COUNT(*) FROM articles a WHERE a.user_id = u.id AND a.deleted_at IS NULL) as article_count,
+              (SELECT COUNT(*) FROM follows f WHERE f.following_id = u.id) as follower_count,
+              (SELECT COUNT(*) FROM likes l
+               JOIN articles a2 ON a2.id = l.article_id
+               WHERE a2.user_id = u.id) as like_count,
+              EXISTS(SELECT 1 FROM follows f2 WHERE f2.follower_id = ? AND f2.following_id = u.id) as is_following
+       FROM users u
+       WHERE u.status != 'banned' AND u.id != ?
+         AND NOT EXISTS(SELECT 1 FROM follows f3 WHERE f3.follower_id = ? AND f3.following_id = u.id)
+       ORDER BY (article_count * 3 + follower_count * 2 + like_count) DESC, u.created_at DESC
+       LIMIT 5`,
+      [excludeId, excludeId, excludeId]
+    );
+    res.json({ users });
+  } catch (err) {
+    console.error('[USERS] 获取推荐用户错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+/**
  * GET /api/users/:id
  * 获取用户公开资料
  */
@@ -70,7 +99,7 @@ router.get('/:id', async (req, res) => {
     
     const user = await dbGet(
 
-      `SELECT id, username, nickname, email, birthday, bio, avatar, created_at
+      `SELECT id, username, nickname, birthday, bio, avatar, created_at
 
        FROM users WHERE id = ?`,
 
@@ -154,6 +183,30 @@ router.put('/profile', authenticateToken, async (req, res) => {
   }
 });
 
+router.post('/:id/block', authenticateToken, async (req, res) => {
+  try {
+    const blockedId = parseInt(req.params.id, 10);
+    if (!blockedId || blockedId === req.user.id) return res.status(400).json({ error: '无效的用户' });
+    const target = await dbGet('SELECT id FROM users WHERE id = ?', [blockedId]);
+    if (!target) return res.status(404).json({ error: '用户不存在' });
+    await dbRun('INSERT OR IGNORE INTO blocked_users (blocker_id, blocked_id) VALUES (?, ?)', [req.user.id, blockedId]);
+    res.status(201).json({ message: '已屏蔽该用户' });
+  } catch (err) {
+    console.error('[USERS] 屏蔽用户错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
+router.delete('/:id/block', authenticateToken, async (req, res) => {
+  try {
+    await dbRun('DELETE FROM blocked_users WHERE blocker_id = ? AND blocked_id = ?', [req.user.id, req.params.id]);
+    res.json({ message: '已取消屏蔽' });
+  } catch (err) {
+    console.error('[USERS] 取消屏蔽错误:', err.message);
+    res.status(500).json({ error: '服务器内部错误' });
+  }
+});
+
 /**
  * GET /api/users/:id/articles
  * 获取用户的文章列表
@@ -168,11 +221,11 @@ router.get('/:id/articles', async (req, res) => {
               articles.created_at, articles.read_time, articles.cover_image,
               articles.user_id,
               users.username, users.nickname, users.avatar,
-              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
+              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id AND comments.deleted_at IS NULL) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
        JOIN users ON articles.user_id = users.id
-       WHERE articles.user_id = ?
+       WHERE articles.user_id = ? AND articles.deleted_at IS NULL
        ORDER BY articles.created_at DESC`,
       [id]
     );
@@ -218,19 +271,19 @@ router.get('/:id/stats', async (req, res) => {
     }
 
     const articleCount = await dbGet(
-      'SELECT COUNT(*) as count FROM articles WHERE user_id = ?',
+      'SELECT COUNT(*) as count FROM articles WHERE user_id = ? AND deleted_at IS NULL',
       [id]
     );
 
     const totalLikes = await dbGet(
       `SELECT COUNT(*) as count FROM likes
-       WHERE article_id IN (SELECT id FROM articles WHERE user_id = ?)`,
+       WHERE article_id IN (SELECT id FROM articles WHERE user_id = ? AND deleted_at IS NULL)`,
       [id]
     );
 
     const totalComments = await dbGet(
       `SELECT COUNT(*) as count FROM comments
-       WHERE article_id IN (SELECT id FROM articles WHERE user_id = ?)`,
+       WHERE deleted_at IS NULL AND article_id IN (SELECT id FROM articles WHERE user_id = ? AND deleted_at IS NULL)`,
       [id]
     );
 

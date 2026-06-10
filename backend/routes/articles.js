@@ -64,11 +64,18 @@ function isValidContent(content) {
   return typeof content === 'string' && content.length >= 1 && content.length <= 50000;
 }
 
+function parsePagination(query) {
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(30, Math.max(1, parseInt(query.limit, 10) || 10));
+  return { page, limit, offset: (page - 1) * limit };
+}
+
 /**
  * GET /api/articles
  * 获取文章列表
  * 支持 ?tag=xxx 按标签筛选（无需登录）
  * 支持 ?scope=following 获取关注作者的文章（需登录）
+ * 支持 ?sort=hot 按互动热度排序
  * 按发布时间倒序，返回摘要信息
  */
 router.get('/', (req, res, next) => {
@@ -79,7 +86,11 @@ router.get('/', (req, res, next) => {
   next();
 }, async (req, res) => {
   try {
-    const { tag, scope } = req.query;
+    const { tag, scope, sort } = req.query;
+    const { page, limit, offset } = parsePagination(req.query);
+    const orderBy = sort === 'hot'
+      ? 'ORDER BY (like_count * 3 + comment_count * 2 + COALESCE(articles.view_count, 0)) DESC, articles.created_at DESC'
+      : 'ORDER BY articles.created_at DESC';
 
     let sql;
     let params = [];
@@ -90,44 +101,50 @@ router.get('/', (req, res, next) => {
 
       sql = `SELECT articles.id, articles.title,
               substr(articles.content, 1, 200) as excerpt,
-              articles.created_at, articles.read_time, articles.cover_image,
+              articles.created_at, articles.read_time, articles.cover_image, articles.view_count,
               articles.user_id,
               users.username, users.nickname, users.avatar,
-              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
+              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id AND comments.deleted_at IS NULL) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
        JOIN users ON articles.user_id = users.id
        WHERE articles.user_id IN (
          SELECT following_id FROM follows WHERE follower_id = ?
        )
-       ORDER BY articles.created_at DESC`;
-      params = [userId];
+         AND articles.deleted_at IS NULL
+       ${orderBy}
+       LIMIT ? OFFSET ?`;
+      params = [userId, limit, offset];
     } else if (tag) {
       sql = `SELECT DISTINCT articles.id, articles.title,
               substr(articles.content, 1, 200) as excerpt,
-              articles.created_at, articles.read_time, articles.cover_image,
+              articles.created_at, articles.read_time, articles.cover_image, articles.view_count,
               articles.user_id,
               users.username, users.nickname, users.avatar,
-              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
+              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id AND comments.deleted_at IS NULL) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
        JOIN users ON articles.user_id = users.id
        JOIN article_tags ON articles.id = article_tags.article_id
        JOIN tags ON article_tags.tag_id = tags.id
-       WHERE tags.name = ?
-       ORDER BY articles.created_at DESC`;
-      params = [tag.toLowerCase().trim()];
+       WHERE tags.name = ? AND articles.deleted_at IS NULL
+       ${orderBy}
+       LIMIT ? OFFSET ?`;
+      params = [tag.toLowerCase().trim(), limit, offset];
     } else {
       sql = `SELECT articles.id, articles.title,
               substr(articles.content, 1, 200) as excerpt,
-              articles.created_at, articles.read_time, articles.cover_image,
+              articles.created_at, articles.read_time, articles.cover_image, articles.view_count,
               articles.user_id,
               users.username, users.nickname, users.avatar,
-              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
+              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id AND comments.deleted_at IS NULL) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
        JOIN users ON articles.user_id = users.id
-       ORDER BY articles.created_at DESC`;
+       WHERE articles.deleted_at IS NULL
+       ${orderBy}
+       LIMIT ? OFFSET ?`;
+      params = [limit, offset];
     }
 
     const articles = await dbAll(sql, params);
@@ -140,7 +157,7 @@ router.get('/', (req, res, next) => {
       })
     );
 
-    res.json({ articles: articlesWithTags });
+    res.json({ articles: articlesWithTags, pagination: { page, limit, hasMore: articles.length === limit } });
   } catch (err) {
     console.error('[ARTICLES] 获取列表错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });
@@ -154,27 +171,45 @@ router.get('/', (req, res, next) => {
  */
 router.get('/search', async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q, tag, author, sort } = req.query;
+    const { page, limit, offset } = parsePagination(req.query);
 
     if (!q || q.trim().length === 0) {
       return res.status(400).json({ error: '搜索关键词不能为空' });
     }
 
     const keyword = `%${q.trim()}%`;
+    const where = ['articles.deleted_at IS NULL', '(articles.title LIKE ? OR articles.content LIKE ?)'];
+    const params = [keyword, keyword];
+    if (tag) {
+      where.push('tags.name = ?');
+      params.push(tag.toLowerCase().trim());
+    }
+    if (author) {
+      where.push('(users.username LIKE ? OR users.nickname LIKE ?)');
+      params.push(`%${author.trim()}%`, `%${author.trim()}%`);
+    }
+    const orderBy = sort === 'hot'
+      ? 'ORDER BY (like_count * 3 + comment_count * 2 + COALESCE(articles.view_count, 0)) DESC, articles.created_at DESC'
+      : 'ORDER BY articles.created_at DESC';
 
     const articles = await dbAll(
       `SELECT articles.id, articles.title,
               substr(articles.content, 1, 200) as excerpt,
-              articles.created_at, articles.read_time, articles.cover_image,
+              articles.created_at, articles.read_time, articles.cover_image, articles.view_count,
               articles.user_id,
               users.username, users.nickname, users.avatar,
-              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
+              (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id AND comments.deleted_at IS NULL) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
        JOIN users ON articles.user_id = users.id
-       WHERE articles.title LIKE ? OR articles.content LIKE ?
-       ORDER BY articles.created_at DESC`,
-      [keyword, keyword]
+       LEFT JOIN article_tags ON articles.id = article_tags.article_id
+       LEFT JOIN tags ON article_tags.tag_id = tags.id
+       WHERE ${where.join(' AND ')}
+       GROUP BY articles.id
+       ${orderBy}
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
     );
 
     // 获取每篇文章的标签
@@ -185,7 +220,7 @@ router.get('/search', async (req, res) => {
       })
     );
 
-    res.json({ articles: articlesWithTags, query: q.trim() });
+    res.json({ articles: articlesWithTags, query: q.trim(), pagination: { page, limit, hasMore: articles.length === limit } });
   } catch (err) {
     console.error('[ARTICLES] 搜索错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });
@@ -206,7 +241,7 @@ router.get('/:id', async (req, res) => {
               articles.user_id, users.username, users.nickname, users.avatar
        FROM articles
        JOIN users ON articles.user_id = users.id
-       WHERE articles.id = ?`,
+       WHERE articles.id = ? AND articles.deleted_at IS NULL`,
       [id]
     );
 

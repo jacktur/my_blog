@@ -46,6 +46,7 @@ function migrateArticlesTable() {
     "ALTER TABLE articles ADD COLUMN cover_image TEXT DEFAULT NULL",
     "ALTER TABLE articles ADD COLUMN read_time INTEGER DEFAULT 0",
     "ALTER TABLE articles ADD COLUMN view_count INTEGER DEFAULT 0",
+    "ALTER TABLE articles ADD COLUMN deleted_at DATETIME DEFAULT NULL",
   ];
   for (const sql of migrations) {
     db.run(sql, (err) => {
@@ -81,6 +82,7 @@ function migrateUsersAdminFields() {
   const migrations = [
     "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'",
     "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'",
+    "ALTER TABLE users ADD COLUMN token_version INTEGER DEFAULT 0",
   ];
   for (const sql of migrations) {
     db.run(sql, (err) => {
@@ -92,6 +94,22 @@ function migrateUsersAdminFields() {
   console.log('[DB] users 管理字段迁移检查完成');
 }
 
+function migrateCommentsTable() {
+  db.run("ALTER TABLE comments ADD COLUMN deleted_at DATETIME DEFAULT NULL", (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('[DB] comments 迁移错误:', err.message);
+    }
+  });
+}
+
+function migrateMessagesTable() {
+  db.run("ALTER TABLE messages ADD COLUMN deleted_at DATETIME DEFAULT NULL", (err) => {
+    if (err && !err.message.includes('duplicate column')) {
+      console.error('[DB] messages 迁移错误:', err.message);
+    }
+  });
+}
+
 // 初始化表结构（使用参数化 SQL，防止 SQL 注入）
 function initDatabase() {
   const createUsersTable = `
@@ -101,6 +119,7 @@ function initDatabase() {
       password TEXT NOT NULL,
       role TEXT DEFAULT 'user',
       status TEXT DEFAULT 'active',
+      token_version INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `;
@@ -111,6 +130,7 @@ function initDatabase() {
       title TEXT NOT NULL,
       content TEXT NOT NULL,
       user_id INTEGER NOT NULL,
+      deleted_at DATETIME DEFAULT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -122,6 +142,7 @@ function initDatabase() {
       content TEXT NOT NULL,
       user_id INTEGER NOT NULL,
       article_id INTEGER NOT NULL,
+      deleted_at DATETIME DEFAULT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE
@@ -225,6 +246,7 @@ function initDatabase() {
         console.error('[DB] 创建 comments 表失败:', err.message);
       } else {
         console.log('[DB] comments 表已就绪');
+        migrateCommentsTable();
       }
     });
 
@@ -347,7 +369,30 @@ function initDatabase() {
 
     db.run(createMessagesTable, (err) => {
       if (err) console.error('[DB] 创建 messages 表失败:', err.message);
-      else console.log('[DB] messages 表已就绪');
+      else {
+        console.log('[DB] messages 表已就绪');
+        migrateMessagesTable();
+      }
+    });
+
+    db.run(createBlockedUsersTable, (err) => {
+      if (err) console.error('[DB] 创建 blocked_users 表失败:', err.message);
+      else console.log('[DB] blocked_users 表已就绪');
+    });
+
+    db.run(createReportsTable, (err) => {
+      if (err) console.error('[DB] 创建 reports 表失败:', err.message);
+      else console.log('[DB] reports 表已就绪');
+    });
+
+    db.run(createModerationActionsTable, (err) => {
+      if (err) console.error('[DB] 创建 moderation_actions 表失败:', err.message);
+      else console.log('[DB] moderation_actions 表已就绪');
+    });
+
+    db.run(createAuthSessionsTable, (err) => {
+      if (err) console.error('[DB] 创建 auth_sessions 表失败:', err.message);
+      else console.log('[DB] auth_sessions 表已就绪');
     });
 
     db.run(createConversationReadersTable, (err) => {
@@ -603,9 +648,67 @@ const createMessagesTable = `
     conversation_id INTEGER NOT NULL,
     sender_id INTEGER NOT NULL,
     content TEXT NOT NULL,
+    deleted_at DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
     FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`;
+
+const createBlockedUsersTable = `
+  CREATE TABLE IF NOT EXISTS blocked_users (
+    blocker_id INTEGER NOT NULL,
+    blocked_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (blocker_id, blocked_id),
+    FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`;
+
+const createReportsTable = `
+  CREATE TABLE IF NOT EXISTS reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id INTEGER NOT NULL,
+    target_type TEXT NOT NULL CHECK(target_type IN ('article','comment','user','message')),
+    target_id INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    details TEXT,
+    status TEXT DEFAULT 'open' CHECK(status IN ('open','resolved','dismissed')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolved_at DATETIME,
+    resolved_by INTEGER,
+    FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (resolved_by) REFERENCES users(id) ON DELETE SET NULL
+  );
+`;
+
+const createModerationActionsTable = `
+  CREATE TABLE IF NOT EXISTS moderation_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id INTEGER NOT NULL,
+    action_type TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id INTEGER NOT NULL,
+    reason TEXT,
+    snapshot_json TEXT,
+    undone_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`;
+
+const createAuthSessionsTable = `
+  CREATE TABLE IF NOT EXISTS auth_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token_version INTEGER DEFAULT 0,
+    user_agent TEXT,
+    ip TEXT,
+    revoked_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `;
 
