@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+export const API_ORIGIN = (import.meta.env.VITE_API_ORIGIN || '').replace(/\/$/, '');
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: `${API_ORIGIN}/api`,
   timeout: 10000,
 });
 
@@ -40,7 +42,7 @@ export const registerApi = (email, username, password, code) =>
   api.post('/auth/register', { email, username, password, code });
 export const loginApi = (identifier, password) =>
   api.post('/auth/login', { identifier, password });
-export const getGoogleAuthUrl = () => '/auth/google';
+export const getGoogleAuthUrl = () => `${API_ORIGIN}/auth/google`;
 export const getAuthConfigApi = () => api.get('/auth/config');
 
 // ====== Articles API ======

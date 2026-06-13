@@ -7,6 +7,9 @@ frontend/dist/
 
 # Environment variables (contains secrets)
 backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
 
 # Database
 backend/*.sqlite

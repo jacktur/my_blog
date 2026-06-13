@@ -1,9 +1,26 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getConversationsApi, createConversationApi, getMessagesApi, sendMessageApi, markConversationReadApi } from '../api';
+import { API_ORIGIN, getConversationsApi, createConversationApi, getMessagesApi, sendMessageApi, markConversationReadApi } from '../api';
 import ChatSidebar from '../components/chat/ChatSidebar';
 import ChatContent from '../components/chat/ChatContent';
+
+function getWebSocketUrl(token) {
+  const configuredWsOrigin = (import.meta.env.VITE_WS_ORIGIN || '').replace(/\/$/, '');
+  if (configuredWsOrigin) {
+    return `${configuredWsOrigin}/ws?token=${encodeURIComponent(token)}`;
+  }
+
+  if (API_ORIGIN) {
+    const apiUrl = new URL(API_ORIGIN);
+    const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${apiUrl.host}/ws?token=${encodeURIComponent(token)}`;
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsHost = import.meta.env.DEV ? 'localhost:3001' : window.location.host;
+  return `${protocol}//${wsHost}/ws?token=${encodeURIComponent(token)}`;
+}
 
 export default function ChatPage() {
   const { isAuthenticated, user, token, logout } = useAuth();
@@ -96,9 +113,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!isAuthenticated || !token) return undefined;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = import.meta.env.DEV ? 'localhost:3001' : window.location.host;
-    const ws = new WebSocket(`${protocol}//${wsHost}/ws?token=${encodeURIComponent(token)}`);
+    const ws = new WebSocket(getWebSocketUrl(token));
     ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
