@@ -1,3 +1,5 @@
+import { Lock } from 'lucide-react';
+
 export default function MessageBubble({ message, isMine }) {
   const formatTime = (d) => {
     if (!d) return '';
@@ -15,6 +17,17 @@ export default function MessageBubble({ message, isMine }) {
         }`}
       >
         <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        {message.encryption_mode === 'e2ee' && (
+          <span
+            className={`inline-flex items-center gap-1 text-[10px] mt-1 ${
+              isMine ? 'text-blue-200' : 'text-gray-500'
+            }`}
+            title={message.decryptionError || '端到端加密消息'}
+          >
+            <Lock size={10} />
+            {message.decryptionPending ? '密文' : '端到端加密'}
+          </span>
+        )}
         <p className={`text-[10px] mt-1 ${isMine ? 'text-blue-200' : 'text-gray-400'}`}>
           {formatTime(message.created_at)}
         </p>

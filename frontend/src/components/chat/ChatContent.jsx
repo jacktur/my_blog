@@ -2,7 +2,18 @@ import ChatHeader from './ChatHeader';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 
-export default function ChatContent({ conversations, activeConvId, messages, onSendMessage, sending, error, onLogout, user }) {
+export default function ChatContent({
+  conversations,
+  activeConvId,
+  messages,
+  onSendMessage,
+  sending,
+  error,
+  onLogout,
+  user,
+  cryptoStatus,
+  cryptoInfo
+}) {
   const activeConversation = conversations.find(c => c.id === activeConvId);
 
   if (!activeConvId || !activeConversation) {
@@ -23,14 +34,19 @@ export default function ChatContent({ conversations, activeConvId, messages, onS
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50">
-      <ChatHeader conversation={activeConversation} onLogout={onLogout} />
+      <ChatHeader
+        conversation={activeConversation}
+        onLogout={onLogout}
+        cryptoStatus={cryptoStatus}
+        cryptoInfo={cryptoInfo}
+      />
       {error && (
         <div className="mx-4 mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-app-red">
           {error}
         </div>
       )}
       <MessageList messages={messages} userId={user?.id} />
-      <MessageInput onSend={onSendMessage} sending={sending} />
+      <MessageInput onSend={onSendMessage} sending={sending} secure={cryptoStatus === 'ready'} />
     </div>
   );
 }

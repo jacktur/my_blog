@@ -421,12 +421,16 @@ export default function AdminPage() {
                 <ContentList
                   emptyText="暂无私信"
                   items={filteredMessages}
-                  renderTitle={(item) => snippet(item.content, 90)}
+                  renderTitle={(item) => item.content?.startsWith('e2ee:v1:')
+                    ? '🔒 端到端加密消息（管理员无法读取）'
+                    : snippet(item.content, 90)}
                   renderMeta={(item) => `${item.sender_nickname || item.sender_username} -> ${item.receiver_nickname || item.receiver_username} · ${formatDate(item.created_at)}`}
                   busyKey={busyKey}
                   onDelete={(item) => requestReason({
                     title: '删除私信',
-                    description: snippet(item.content, 120),
+                    description: item.content?.startsWith('e2ee:v1:')
+                      ? '该私信为端到端加密密文，管理员只能执行删除操作'
+                      : snippet(item.content, 120),
                     placeholder: '例如：骚扰、诈骗、恶意链接',
                     confirmText: '删除私信',
                     danger: true,

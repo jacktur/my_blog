@@ -1,7 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { API_ORIGIN, getConversationsApi, createConversationApi, getMessagesApi, sendMessageApi, markConversationReadApi } from '../api';
+import {
+  API_ORIGIN,
+  getConversationsApi,
+  createConversationApi,
+  getMessagesApi,
+  sendMessageApi,
+  markConversationReadApi,
+  getConversationCryptoApi,
+  uploadCryptoKeyApi
+} from '../api';
+import {
+  ensureIdentity,
+  getPublicIdentity,
+  calculateFingerprint,
+  encryptMessage,
+  decryptMessage,
+  isEncryptedMessage
+} from '../utils/e2ee';
 import ChatSidebar from '../components/chat/ChatSidebar';
 import ChatContent from '../components/chat/ChatContent';
 
@@ -32,7 +49,10 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [cryptoStatus, setCryptoStatus] = useState('idle');
+  const [cryptoInfo, setCryptoInfo] = useState(null);
   const fetchId = useRef(0);
+  const cryptoContextRef = useRef(null);
 
   const appendMessage = useCallback((message) => {
     setMessages(prev => prev.some(m => m.id === message.id) ? prev : [...prev, message]);
@@ -49,6 +69,122 @@ export default function ChatPage() {
       console.error('[CHAT] 获取会话列表失败:', err.message);
     }
   }, []);
+
+  const decodeMessages = useCallback(async (rawMessages, context) => {
+    if (!context) {
+      return rawMessages.map(message => (
+        message.encryption_mode === 'e2ee' && isEncryptedMessage(message.content)
+          ? { ...message, content: '🔒 等待安全密钥后解密', decryptionPending: true }
+          : message
+      ));
+    }
+
+    return Promise.all(rawMessages.map(async message => {
+      if (message.encryption_mode !== 'e2ee' || !isEncryptedMessage(message.content)) {
+        return message;
+      }
+
+      try {
+        const plaintext = await decryptMessage({
+          conversationId: context.conversationId,
+          message,
+          identity: context.identity,
+          peerKey: context.peerKey
+        });
+        return { ...message, content: plaintext, decrypted: true };
+      } catch (err) {
+        return {
+          ...message,
+          content: '🔒 无法解密的消息',
+          decryptionPending: true,
+          decryptionError: err.message
+        };
+      }
+    }));
+  }, []);
+
+  const prepareConversationCrypto = useCallback(async (conversationId) => {
+    if (!user?.id) return null;
+
+    setCryptoStatus('preparing');
+    try {
+      const identity = await ensureIdentity(user.id);
+      const publicIdentity = getPublicIdentity(identity);
+      const [exchangeFingerprint, signingFingerprint] = await Promise.all([
+        calculateFingerprint(publicIdentity.exchangePublicKey),
+        calculateFingerprint(publicIdentity.signingPublicKey)
+      ]);
+
+      await uploadCryptoKeyApi({
+        ...publicIdentity,
+        exchangeFingerprint,
+        signingFingerprint
+      });
+
+      const response = await getConversationCryptoApi(conversationId);
+      const { participants, keys } = response.data;
+      const peerId = participants.find(participantId => participantId !== user.id);
+      const peerKey = keys.find(key => key.user_id === peerId);
+
+      if (!peerKey) {
+        cryptoContextRef.current = null;
+        setCryptoStatus('waiting');
+        setCryptoInfo({ status: 'waiting', peerId });
+        return null;
+      }
+
+      const normalizedPeerKey = {
+        exchangePublicKey: peerKey.exchange_public_key,
+        signingPublicKey: peerKey.signing_public_key
+      };
+      const localPeerExchangeFingerprint = await calculateFingerprint(normalizedPeerKey.exchangePublicKey);
+      if (localPeerExchangeFingerprint !== peerKey.exchange_fingerprint) {
+        throw new Error('对方公钥指纹验证失败');
+      }
+
+      const fingerprintKey = `blog-e2ee-fingerprint:${conversationId}:${peerId}`;
+      const previousFingerprint = localStorage.getItem(fingerprintKey);
+      const fingerprintChanged = Boolean(
+        previousFingerprint && previousFingerprint !== peerKey.exchange_fingerprint
+      );
+      if (!previousFingerprint) {
+        localStorage.setItem(fingerprintKey, peerKey.exchange_fingerprint);
+      }
+
+      const context = {
+        conversationId,
+        identity,
+        peerKey: normalizedPeerKey,
+        peerId
+      };
+      cryptoContextRef.current = context;
+      setCryptoStatus('ready');
+      setCryptoInfo({
+        status: 'ready',
+        peerId,
+        fingerprint: peerKey.exchange_fingerprint,
+        fingerprintChanged
+      });
+      return context;
+    } catch (err) {
+      cryptoContextRef.current = null;
+      setCryptoStatus('error');
+      setCryptoInfo({ status: 'error', message: err.message });
+      return null;
+    }
+  }, [user]);
+
+  const loadMessages = useCallback(async (conversationId, options = {}) => {
+    const { markRead = true } = options;
+    const context = await prepareConversationCrypto(conversationId);
+    const response = await getMessagesApi(conversationId);
+    const rawMessages = [...response.data.messages].reverse();
+    const decodedMessages = await decodeMessages(rawMessages, context);
+    setMessages(decodedMessages);
+    if (markRead) await markConversationReadApi(conversationId);
+    await fetchConversations();
+    return context;
+  }, [decodeMessages, fetchConversations, prepareConversationCrypto]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -69,41 +205,35 @@ export default function ChatPage() {
         const exists = conversations.find(c => c.id === convId);
         if (!exists) await fetchConversations();
         setActiveConvId(convId);
-        const messagesRes = await getMessagesApi(convId);
-        setMessages(messagesRes.data.messages.reverse());
-        await markConversationReadApi(convId);
+        await loadMessages(convId);
         navigate('/chat', { replace: true });
       } catch (err) {
         setError(err.response?.data?.error || '创建会话失败');
         console.error('[CHAT] 创建会话失败:', err.message);
       }
     })();
-  }, [conversations, fetchConversations, isAuthenticated, loading, navigate, searchParams]);
+  }, [conversations, fetchConversations, isAuthenticated, loadMessages, loading, navigate, searchParams]);
 
   const handleSelectConversation = useCallback(async (convId) => {
     setActiveConvId(convId);
     setError('');
+    setMessages([]);
     try {
-      const res = await getMessagesApi(convId);
-      setMessages(res.data.messages.reverse());
-      await markConversationReadApi(convId);
-      fetchConversations();
+      await loadMessages(convId);
     } catch (err) {
       setError(err.response?.data?.error || '获取消息失败');
       console.error('[CHAT] 获取消息失败:', err.message);
     }
-  }, [fetchConversations]);
+  }, [loadMessages]);
 
   const refreshActiveConversation = useCallback(async () => {
     if (!activeConvId) return;
     try {
-      const res = await getMessagesApi(activeConvId);
-      setMessages(res.data.messages.reverse());
-      fetchConversations();
+      await loadMessages(activeConvId, { markRead: false });
     } catch {
       return undefined;
     }
-  }, [activeConvId, fetchConversations]);
+  }, [activeConvId, loadMessages]);
 
   useEffect(() => {
     if (!isAuthenticated || !activeConvId) return undefined;
@@ -114,12 +244,16 @@ export default function ChatPage() {
   useEffect(() => {
     if (!isAuthenticated || !token) return undefined;
     const ws = new WebSocket(getWebSocketUrl(token));
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
       try {
         const payload = JSON.parse(event.data);
         if ((payload.type === 'message' || payload.type === 'message_sent') && payload.message) {
           if (payload.conversationId === activeConvId) {
-            appendMessage(payload.message);
+            const [decodedMessage] = await decodeMessages(
+              [payload.message],
+              cryptoContextRef.current
+            );
+            appendMessage(decodedMessage);
             markConversationReadApi(payload.conversationId).catch(() => {});
           }
           fetchConversations();
@@ -134,7 +268,7 @@ export default function ChatPage() {
         ws.close();
       }
     };
-  }, [activeConvId, appendMessage, fetchConversations, isAuthenticated, token]);
+  }, [activeConvId, appendMessage, decodeMessages, fetchConversations, isAuthenticated, token]);
 
   useEffect(() => {
     const conversationId = parseInt(searchParams.get('conversation'), 10);
@@ -149,11 +283,27 @@ export default function ChatPage() {
     setSending(true);
     setError('');
     try {
-      const res = await sendMessageApi(activeConvId, content.trim());
-      appendMessage(res.data.message);
+      let context = cryptoContextRef.current;
+      if (!context || context.conversationId !== activeConvId) {
+        context = await prepareConversationCrypto(activeConvId);
+      }
+      if (!context) {
+        throw new Error('正在等待双方建立安全密钥，请稍后重试');
+      }
+
+      const encryptedContent = await encryptMessage({
+        conversationId: activeConvId,
+        senderId: user.id,
+        plaintext: content.trim(),
+        identity: context.identity,
+        peerKey: context.peerKey
+      });
+      const res = await sendMessageApi(activeConvId, encryptedContent);
+      const [decodedMessage] = await decodeMessages([res.data.message], context);
+      appendMessage(decodedMessage);
       fetchConversations();
     } catch (err) {
-      setError(err.response?.data?.error || '消息发送失败');
+      setError(err.response?.data?.error || err.message || '消息发送失败');
       console.error('[CHAT] 发送消息失败:', err.message);
     } finally {
       setSending(false);
@@ -199,6 +349,8 @@ export default function ChatPage() {
         error={error}
         onLogout={handleLogout}
         user={user}
+        cryptoStatus={cryptoStatus}
+        cryptoInfo={cryptoInfo}
       />
     </div>
   );

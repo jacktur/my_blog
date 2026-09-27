@@ -1,7 +1,9 @@
 import ChatMenu from './ChatMenu';
 import { Link } from 'react-router-dom';
+import { Lock, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { formatFingerprint } from '../../utils/e2ee';
 
-export default function ChatHeader({ conversation, onLogout }) {
+export default function ChatHeader({ conversation, onLogout, cryptoStatus, cryptoInfo }) {
   const getAvatarUrl = (avatar) => {
     if (!avatar) return '/uploads/avatars/defaults/default-1.svg';
     if (avatar?.startsWith('custom/')) return `/uploads/avatars/${avatar}`;
@@ -36,7 +38,43 @@ export default function ChatHeader({ conversation, onLogout }) {
             </Link>
           ) : avatar}
         </div>
-        <span className="text-sm font-semibold text-gray-900">{displayName}</span>
+        <div>
+          <span className="text-sm font-semibold text-gray-900">{displayName}</span>
+          <div className="flex items-center gap-1 text-[10px] text-gray-500">
+            {cryptoStatus === 'ready' && (
+              <>
+                <ShieldCheck size={11} className="text-emerald-600" />
+                <span className="text-emerald-700">端到端加密</span>
+                <span title={`对方公钥指纹：${formatFingerprint(cryptoInfo?.fingerprint)}`}>
+                  · 指纹已生成
+                </span>
+              </>
+            )}
+            {cryptoStatus === 'waiting' && (
+              <>
+                <Lock size={11} className="text-amber-600" />
+                <span>等待对方安全密钥</span>
+              </>
+            )}
+            {cryptoStatus === 'preparing' && (
+              <>
+                <Lock size={11} className="text-blue-600" />
+                <span>正在建立安全连接</span>
+              </>
+            )}
+            {cryptoStatus === 'error' && (
+              <>
+                <TriangleAlert size={11} className="text-red-600" />
+                <span className="text-red-600">安全连接异常</span>
+              </>
+            )}
+            {cryptoInfo?.fingerprintChanged && (
+              <span className="text-red-600" title="请先通过其他渠道核对对方新指纹">
+                · 指纹已变化
+              </span>
+            )}
+          </div>
+        </div>
       </div>
       <ChatMenu onLogout={onLogout} />
     </div>

@@ -375,6 +375,11 @@ function initDatabase() {
       }
     });
 
+    db.run(createUserCryptoKeysTable, (err) => {
+      if (err) console.error('[DB] 创建 user_crypto_keys 表失败:', err.message);
+      else console.log('[DB] user_crypto_keys 表已就绪');
+    });
+
     db.run(createBlockedUsersTable, (err) => {
       if (err) console.error('[DB] 创建 blocked_users 表失败:', err.message);
       else console.log('[DB] blocked_users 表已就绪');
@@ -719,6 +724,20 @@ const createConversationReadersTable = `
     last_read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (conversation_id, user_id),
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+`;
+
+const createUserCryptoKeysTable = `
+  CREATE TABLE IF NOT EXISTS user_crypto_keys (
+    user_id INTEGER PRIMARY KEY,
+    algorithm TEXT NOT NULL DEFAULT 'ECDH-P256+A256GCM+ECDSA-P256',
+    exchange_public_key TEXT NOT NULL,
+    exchange_fingerprint TEXT NOT NULL,
+    signing_public_key TEXT NOT NULL,
+    signing_fingerprint TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   );
 `;

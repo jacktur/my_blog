@@ -25,6 +25,7 @@ const gamificationRoutes = require('./routes/gamification');
 const draftRoutes = require('./routes/drafts');
 const seriesRoutes = require('./routes/series');
 const chatRoutes = require('./routes/chat');
+const cryptoRoutes = require('./routes/crypto');
 const adminRoutes = require('./routes/admin');
 const reportRoutes = require('./routes/reports');
 const { suggestTags, extractSummary } = require('./utils/tagSuggester');
@@ -98,6 +99,7 @@ app.use('/api/gamification', gamificationRoutes);
 app.use('/api/drafts', draftRoutes);
 app.use('/api/series', seriesRoutes);
 app.use('/api/conversations', chatRoutes);
+app.use('/api/crypto', cryptoRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
 

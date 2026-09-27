@@ -182,6 +182,10 @@ export const sendMessageApi = (conversationId, content) =>
   api.post(`/conversations/${conversationId}/messages`, { content });
 export const markConversationReadApi = (conversationId) =>
   api.put(`/conversations/${conversationId}/read`);
+export const getConversationCryptoApi = (conversationId) =>
+  api.get(`/crypto/conversations/${conversationId}`);
+export const uploadCryptoKeyApi = (payload) =>
+  api.put('/crypto/keys', payload);
 export const reportApi = (data) => api.post('/reports', data);
 
 // ====== Admin API ======

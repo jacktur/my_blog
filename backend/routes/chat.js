@@ -4,6 +4,40 @@ const { dbGet, dbRun, dbAll } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 const { sendToUser } = require('../realtime');
 
+const E2EE_PREFIX = 'e2ee:v1:';
+
+function parseEncryptedEnvelope(content, conversationId, senderId) {
+  if (!content.startsWith(E2EE_PREFIX)) return null;
+
+  let envelope;
+  try {
+    envelope = JSON.parse(content.slice(E2EE_PREFIX.length));
+  } catch {
+    throw new Error('加密消息格式无效');
+  }
+
+  const validBase64 = (value, byteLength) => {
+    if (typeof value !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+    const raw = Buffer.from(value, 'base64');
+    return raw.toString('base64') === value && raw.length === byteLength;
+  };
+
+  if (
+    envelope.v !== 1 ||
+    envelope.conv !== conversationId ||
+    envelope.sender !== senderId ||
+    !validBase64(envelope.iv, 12) ||
+    typeof envelope.ct !== 'string' ||
+    envelope.ct.length < 16 ||
+    envelope.ct.length > 32000 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(envelope.sig || '')
+  ) {
+    throw new Error('加密消息格式无效');
+  }
+
+  return envelope;
+}
+
 /**
  * GET /api/conversations
  * 获取当前用户的所有会话（支持 ?scope=recent 用于铃铛下拉）
@@ -128,6 +162,7 @@ router.get('/:id/messages', authenticateToken, async (req, res) => {
 
     const messages = await dbAll(`
       SELECT m.id, m.sender_id, m.content, m.created_at,
+             CASE WHEN m.content LIKE 'e2ee:v1:%' THEN 'e2ee' ELSE 'plaintext' END as encryption_mode,
              u.username as sender_username, u.nickname as sender_nickname, u.avatar as sender_avatar
       FROM messages m
       JOIN users u ON u.id = m.sender_id
@@ -166,7 +201,18 @@ router.post('/:id/messages', authenticateToken, async (req, res) => {
     if (!content || typeof content !== 'string' || !content.trim()) {
       return res.status(400).json({ error: '消息内容不能为空' });
     }
-    if (content.length > 2000) {
+
+    const isEncrypted = content.startsWith(E2EE_PREFIX);
+    if (isEncrypted) {
+      try {
+        parseEncryptedEnvelope(content, conversationId, userId);
+      } catch (err) {
+        return res.status(400).json({ error: err.message });
+      }
+      if (content.length > 36000) {
+        return res.status(400).json({ error: '加密消息过大' });
+      }
+    } else if (content.length > 2000) {
       return res.status(400).json({ error: '消息内容不能超过2000字' });
     }
 
@@ -188,9 +234,10 @@ router.post('/:id/messages', authenticateToken, async (req, res) => {
       [conversationId, userId, content.trim()]
     );
 
+    const preview = isEncrypted ? '🔒 加密消息' : content.trim();
     await dbRun(
       'UPDATE conversations SET last_message = ?, last_message_at = CURRENT_TIMESTAMP, last_sender_id = ? WHERE id = ?',
-      [content.trim(), userId, conversationId]
+      [preview, userId, conversationId]
     );
 
     await dbRun(
@@ -205,6 +252,7 @@ router.post('/:id/messages', authenticateToken, async (req, res) => {
 
     const message = await dbGet(
       `SELECT m.id, m.sender_id, m.content, m.created_at,
+              CASE WHEN m.content LIKE 'e2ee:v1:%' THEN 'e2ee' ELSE 'plaintext' END as encryption_mode,
               u.username as sender_username, u.nickname as sender_nickname, u.avatar as sender_avatar
        FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?`,
       [result.lastID]

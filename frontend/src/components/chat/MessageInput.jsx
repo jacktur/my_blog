@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Send } from 'lucide-react';
 
-export default function MessageInput({ onSend, sending }) {
+export default function MessageInput({ onSend, sending, secure }) {
   const [content, setContent] = useState('');
 
   const handleSubmit = (e) => {
@@ -26,7 +26,7 @@ export default function MessageInput({ onSend, sending }) {
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="输入消息..."
+          placeholder={secure ? '输入端到端加密消息...' : '输入消息...'}
           maxLength={2000}
           className="flex-1 h-10 px-4 rounded-full bg-gray-100 text-sm text-gray-900
             placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:bg-gray-50"
