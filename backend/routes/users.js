@@ -68,10 +68,10 @@ router.get('/recommended', async (req, res) => {
     const excludeId = parseInt(req.query.exclude, 10) || 0;
     const users = await dbAll(
       `SELECT u.id, u.username, u.nickname, u.bio, u.avatar,
-              (SELECT COUNT(*) FROM articles a WHERE a.user_id = u.id AND a.deleted_at IS NULL) as article_count,
+              (SELECT COUNT(*) FROM published_articles a WHERE a.user_id = u.id AND a.deleted_at IS NULL) as article_count,
               (SELECT COUNT(*) FROM follows f WHERE f.following_id = u.id) as follower_count,
               (SELECT COUNT(*) FROM likes l
-               JOIN articles a2 ON a2.id = l.article_id
+               JOIN published_articles a2 ON a2.id = l.article_id
                WHERE a2.user_id = u.id) as like_count,
               EXISTS(SELECT 1 FROM follows f2 WHERE f2.follower_id = ? AND f2.following_id = u.id) as is_following
        FROM users u
@@ -223,7 +223,7 @@ router.get('/:id/articles', async (req, res) => {
               users.username, users.nickname, users.avatar,
               (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id AND comments.deleted_at IS NULL) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
-       FROM articles
+       FROM published_articles AS articles
        JOIN users ON articles.user_id = users.id
        WHERE articles.user_id = ? AND articles.deleted_at IS NULL
        ORDER BY articles.created_at DESC`,
@@ -271,19 +271,19 @@ router.get('/:id/stats', async (req, res) => {
     }
 
     const articleCount = await dbGet(
-      'SELECT COUNT(*) as count FROM articles WHERE user_id = ? AND deleted_at IS NULL',
+      'SELECT COUNT(*) as count FROM published_articles AS articles WHERE user_id = ? AND deleted_at IS NULL',
       [id]
     );
 
     const totalLikes = await dbGet(
       `SELECT COUNT(*) as count FROM likes
-       WHERE article_id IN (SELECT id FROM articles WHERE user_id = ? AND deleted_at IS NULL)`,
+       WHERE article_id IN (SELECT id FROM published_articles AS articles WHERE user_id = ? AND deleted_at IS NULL)`,
       [id]
     );
 
     const totalComments = await dbGet(
       `SELECT COUNT(*) as count FROM comments
-       WHERE deleted_at IS NULL AND article_id IN (SELECT id FROM articles WHERE user_id = ? AND deleted_at IS NULL)`,
+       WHERE deleted_at IS NULL AND article_id IN (SELECT id FROM published_articles AS articles WHERE user_id = ? AND deleted_at IS NULL)`,
       [id]
     );
 

@@ -3,7 +3,7 @@ const path = require('path');
 const { seedDevelopmentData } = require('./seeds/developmentSeed');
 
 // 数据库文件存放在 backend 目录下
-const dbPath = path.join(__dirname, 'blog.sqlite');
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'blog.sqlite');
 
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
@@ -47,6 +47,10 @@ function migrateArticlesTable() {
     "ALTER TABLE articles ADD COLUMN read_time INTEGER DEFAULT 0",
     "ALTER TABLE articles ADD COLUMN view_count INTEGER DEFAULT 0",
     "ALTER TABLE articles ADD COLUMN deleted_at DATETIME DEFAULT NULL",
+    "ALTER TABLE articles ADD COLUMN moderation_status TEXT NOT NULL DEFAULT 'published'",
+    "ALTER TABLE articles ADD COLUMN moderation_json TEXT DEFAULT NULL",
+    "ALTER TABLE articles ADD COLUMN moderation_revision INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE articles ADD COLUMN publication_rewarded INTEGER NOT NULL DEFAULT 1",
   ];
   for (const sql of migrations) {
     db.run(sql, (err) => {
@@ -56,6 +60,26 @@ function migrateArticlesTable() {
     });
   }
   console.log('[DB] articles 表迁移检查完成');
+  db.run("CREATE VIEW IF NOT EXISTS published_articles AS SELECT * FROM articles WHERE deleted_at IS NULL AND moderation_status = 'published'");
+  // Commit human labels and audit history together with the reviewed revision.
+  db.run(`CREATE TRIGGER IF NOT EXISTS record_article_review
+    AFTER UPDATE OF moderation_status ON articles
+    WHEN json_extract(NEW.moderation_json, '$.review.adminId') IS NOT NULL
+      AND NEW.moderation_revision = OLD.moderation_revision + 1
+    BEGIN
+      INSERT INTO moderation_feedback (article_id, revision, admin_id, label, reason, snapshot_json)
+      VALUES (OLD.id, OLD.moderation_revision, json_extract(NEW.moderation_json, '$.review.adminId'),
+        CASE NEW.moderation_status WHEN 'published' THEN 0 ELSE 1 END,
+        json_extract(NEW.moderation_json, '$.review.reason'),
+        json_object('id', OLD.id, 'title', OLD.title, 'content', OLD.content, 'user_id', OLD.user_id,
+          'moderation_revision', OLD.moderation_revision, 'moderation_json', OLD.moderation_json,
+          'tags', (SELECT json_group_array(name) FROM tags JOIN article_tags ON tags.id = article_tags.tag_id WHERE article_tags.article_id = OLD.id)));
+      INSERT INTO moderation_actions (admin_id, action_type, target_type, target_id, reason, snapshot_json)
+      VALUES (json_extract(NEW.moderation_json, '$.review.adminId'),
+        CASE NEW.moderation_status WHEN 'published' THEN 'approve' ELSE 'reject' END,
+        'article', OLD.id, json_extract(NEW.moderation_json, '$.review.reason'),
+        json_object('title', OLD.title, 'revision', OLD.moderation_revision));
+    END`);
 }
 
 // 用户表迁移：添加游戏化字段
@@ -395,6 +419,18 @@ function initDatabase() {
       else console.log('[DB] moderation_actions 表已就绪');
     });
 
+    db.run(`CREATE TABLE IF NOT EXISTS moderation_feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      article_id INTEGER NOT NULL,
+      revision INTEGER NOT NULL,
+      admin_id INTEGER NOT NULL,
+      label INTEGER NOT NULL CHECK(label IN (0, 1)),
+      reason TEXT NOT NULL,
+      snapshot_json TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(article_id, revision)
+    )`);
+
     db.run(createAuthSessionsTable, (err) => {
       if (err) console.error('[DB] 创建 auth_sessions 表失败:', err.message);
       else console.log('[DB] auth_sessions 表已就绪');
@@ -405,7 +441,7 @@ function initDatabase() {
       else {
         console.log('[DB] conversation_readers 表已就绪');
         seedAchievements()
-          .then(() => seedDevelopmentData({ dbGet, dbRun }))
+          .then(() => process.env.NODE_ENV === 'test' ? null : seedDevelopmentData({ dbGet, dbRun }))
           .catch((seedErr) => {
             console.error('[DB] 开发种子数据初始化失败:', seedErr.message);
           });

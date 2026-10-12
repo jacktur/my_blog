@@ -18,12 +18,12 @@ const REPORT_REASONS = new Set([
 
 async function findReportTarget(targetType, targetId, reporterId) {
   if (targetType === 'article') {
-    return dbGet('SELECT id FROM articles WHERE id = ? AND deleted_at IS NULL', [targetId]);
+    return dbGet('SELECT id FROM published_articles WHERE id = ?', [targetId]);
   }
   if (targetType === 'comment') {
     return dbGet(
       `SELECT c.id FROM comments c
-       JOIN articles a ON a.id = c.article_id
+       JOIN published_articles a ON a.id = c.article_id
        WHERE c.id = ? AND c.deleted_at IS NULL AND a.deleted_at IS NULL`,
       [targetId]
     );

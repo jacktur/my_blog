@@ -253,7 +253,10 @@ export async function decryptMessage({ conversationId, message, identity, peerKe
     throw new Error('消息上下文不匹配');
   }
 
-  const signingPublicKey = await importSigningPublicKey(peerKey.signingPublicKey);
+  const signingPublicKeyBase64 = String(message.sender_id) === String(identity.userId)
+    ? identity.signing.publicKey
+    : peerKey.signingPublicKey;
+  const signingPublicKey = await importSigningPublicKey(signingPublicKeyBase64);
   const validSignature = await crypto.subtle.verify(
     { name: 'ECDSA', hash: 'SHA-256' },
     signingPublicKey,

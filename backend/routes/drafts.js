@@ -3,6 +3,7 @@ const router = express.Router();
 const { dbGet, dbRun, dbAll } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 const { calculateReadTime } = require('../utils/calculateReadTime');
+const { validateArticle, analyzeArticle, rewardPublication, moderationMessage } = require('../moderation/service');
 
 /**
  * GET /api/drafts
@@ -122,11 +123,14 @@ router.post('/:id/publish', authenticateToken, async (req, res) => {
 
     const readTime = calculateReadTime(draft.content);
     const tags = draft.tags ? draft.tags.split(',').filter(Boolean) : [];
+    const validationError = validateArticle(draft.title, draft.content, tags);
+    if (validationError) return res.status(400).json({ error: validationError });
+    const moderation = analyzeArticle({ title: draft.title, content: draft.content, tags });
     const coverImage = draft.cover_image || null;
 
     const result = await dbRun(
-      'INSERT INTO articles (title, content, user_id, read_time, cover_image) VALUES (?, ?, ?, ?, ?)',
-      [draft.title, draft.content, req.user.id, readTime, coverImage]
+      'INSERT INTO articles (title, content, user_id, read_time, cover_image, moderation_status, moderation_json, moderation_revision, publication_rewarded) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0)',
+      [draft.title, draft.content, req.user.id, readTime, coverImage, moderation.decision, JSON.stringify(moderation)]
     );
 
     if (tags.length > 0) {
@@ -145,7 +149,9 @@ router.post('/:id/publish', authenticateToken, async (req, res) => {
     // Delete draft
     await dbRun('DELETE FROM drafts WHERE id = ?', [id]);
 
-    res.status(201).json({ message: '草稿已发布', article: { id: result.lastID } });
+    const gamification = await rewardPublication(result.lastID);
+    res.status(201).json({ message: moderationMessage(moderation.decision), moderation, gamification,
+      article: { id: result.lastID, moderation_status: moderation.decision } });
   } catch (err) {
     console.error('[DRAFTS] 发布草稿错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });

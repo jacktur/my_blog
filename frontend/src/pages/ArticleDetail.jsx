@@ -14,6 +14,7 @@ import { splitHtmlAtCodeBlocks } from '../utils/codeBlockEnhancer';
 import { getAvatarUrl, getDisplayName } from '../utils/displayName';
 import { useConfirm } from '../components/ConfirmDialog';
 import ReportDialog from '../components/ReportDialog';
+import ModerationEvidence from '../components/ModerationEvidence';
 
 export default function ArticleDetail() {
   const { id } = useParams();
@@ -131,7 +132,7 @@ export default function ArticleDetail() {
 
   return (
     <div className="min-h-screen bg-app-bg">
-      <ReadingProgressBar articleId={id} />
+      {article.moderation_status === 'published' && <ReadingProgressBar articleId={id} />}
       <TableOfContents contentRef={contentRef} />
       <ReportDialog
         open={reportOpen}
@@ -155,6 +156,7 @@ export default function ArticleDetail() {
         </Link>
 
         {/* Title */}
+        {article.moderation_status !== 'published' && <ModerationEvidence moderation={article.moderation} status={article.moderation_status} />}
         <h1 className="text-2xl md:text-3xl font-bold text-app-text mb-4 leading-tight tracking-tight">
           {article.title}
         </h1>
@@ -198,7 +200,7 @@ export default function ArticleDetail() {
                 <button onClick={handleBlockAuthor} className="px-2 py-1.5 rounded-full text-xs text-app-subtext hover:text-app-red hover:bg-red-50 transition-colors">屏蔽</button>
               </>
             )}
-            <BookmarkButton articleId={article.id} />
+            {article.moderation_status === 'published' && <BookmarkButton articleId={article.id} />}
             {isOwner && (
               <>
                 <Link to={`/edit/${article.id}`}
@@ -232,7 +234,7 @@ export default function ArticleDetail() {
         </article>
 
         {/* Comment Section */}
-        <CommentSection articleId={article.id} />
+        {article.moderation_status === 'published' && <CommentSection articleId={article.id} />}
       </div>
     </div>
   );

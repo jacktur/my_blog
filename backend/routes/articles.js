@@ -3,7 +3,7 @@ const router = express.Router();
 const { dbGet, dbRun, dbAll } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 const { calculateReadTime } = require('../utils/calculateReadTime');
-const { grantXP, checkAchievements, addActivity } = require('./gamification');
+const { validateArticle, moderationMessage, rewardPublication, analyzeArticle } = require('../moderation/service');
 
 /**
  * 输入清理 — 防 XSS
@@ -56,14 +56,6 @@ async function getArticleTags(articleId) {
   );
 }
 
-function isValidTitle(title) {
-  return typeof title === 'string' && title.length >= 1 && title.length <= 200;
-}
-
-function isValidContent(content) {
-  return typeof content === 'string' && content.length >= 1 && content.length <= 50000;
-}
-
 function parsePagination(query) {
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   const limit = Math.min(30, Math.max(1, parseInt(query.limit, 10) || 10));
@@ -111,7 +103,7 @@ router.get('/', (req, res, next) => {
        WHERE articles.user_id IN (
          SELECT following_id FROM follows WHERE follower_id = ?
        )
-         AND articles.deleted_at IS NULL
+         AND articles.deleted_at IS NULL AND articles.moderation_status = 'published'
        ${orderBy}
        LIMIT ? OFFSET ?`;
       params = [userId, limit, offset];
@@ -127,7 +119,7 @@ router.get('/', (req, res, next) => {
        JOIN users ON articles.user_id = users.id
        JOIN article_tags ON articles.id = article_tags.article_id
        JOIN tags ON article_tags.tag_id = tags.id
-       WHERE tags.name = ? AND articles.deleted_at IS NULL
+       WHERE tags.name = ? AND articles.deleted_at IS NULL AND articles.moderation_status = 'published'
        ${orderBy}
        LIMIT ? OFFSET ?`;
       params = [tag.toLowerCase().trim(), limit, offset];
@@ -141,7 +133,7 @@ router.get('/', (req, res, next) => {
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM articles
        JOIN users ON articles.user_id = users.id
-       WHERE articles.deleted_at IS NULL
+       WHERE articles.deleted_at IS NULL AND articles.moderation_status = 'published'
        ${orderBy}
        LIMIT ? OFFSET ?`;
       params = [limit, offset];
@@ -179,7 +171,7 @@ router.get('/search', async (req, res) => {
     }
 
     const keyword = `%${q.trim()}%`;
-    const where = ['articles.deleted_at IS NULL', '(articles.title LIKE ? OR articles.content LIKE ?)'];
+    const where = ['articles.deleted_at IS NULL', "articles.moderation_status = 'published'", '(articles.title LIKE ? OR articles.content LIKE ?)'];
     const params = [keyword, keyword];
     if (tag) {
       where.push('tags.name = ?');
@@ -231,13 +223,25 @@ router.get('/search', async (req, res) => {
  * GET /api/articles/:id
  * 获取单篇文章详情（无需登录）
  */
-router.get('/:id', async (req, res) => {
+router.get('/mine/submissions', authenticateToken, async (req, res) => {
+  try {
+    const articles = await dbAll(`SELECT id, title, moderation_status, moderation_revision, moderation_json, created_at
+      FROM articles WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100`, [req.user.id]);
+    res.json({ articles: articles.map((article) => ({ ...article, moderation: JSON.parse(article.moderation_json || 'null'), moderation_json: undefined })) });
+  } catch (err) { res.status(500).json({ error: '加载投稿失败' }); }
+});
+
+router.get('/:id', (req, res, next) => {
+  if (req.headers.authorization) return authenticateToken(req, res, next);
+  next();
+}, async (req, res) => {
   try {
     const { id } = req.params;
 
     const article = await dbGet(
       `SELECT articles.id, articles.title, articles.content,
               articles.created_at, articles.read_time, articles.cover_image, articles.view_count,
+              articles.moderation_status, articles.moderation_json,
               articles.user_id, users.username, users.nickname, users.avatar
        FROM articles
        JOIN users ON articles.user_id = users.id
@@ -249,6 +253,11 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: '文章不存在' });
     }
 
+    const privileged = req.user?.id === article.user_id || req.user?.role === 'admin';
+    if (article.moderation_status !== 'published' && !privileged) return res.status(404).json({ error: '文章不存在' });
+    article.moderation = privileged ? JSON.parse(article.moderation_json || 'null') : undefined;
+    delete article.moderation_json;
+
     // 获取标签
     const tags = await getArticleTags(article.id);
 
@@ -258,7 +267,7 @@ router.get('/:id', async (req, res) => {
       "SELECT id FROM article_views WHERE article_id = ? AND ip = ? AND date(viewed_at) = date('now')",
       [id, clientIp]
     );
-    if (!existingView) {
+    if (!existingView && article.moderation_status === 'published') {
       await dbRun(
         'INSERT INTO article_views (article_id, ip) VALUES (?, ?)',
         [id, clientIp]
@@ -285,26 +294,18 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const { title, content, tags } = req.body;
 
-    if (!title || !content) {
-      return res.status(400).json({ error: '标题和内容不能为空' });
-    }
-
-    if (!isValidTitle(title)) {
-      return res.status(400).json({ error: '标题长度需在 1-200 个字符之间' });
-    }
-
-    if (!isValidContent(content)) {
-      return res.status(400).json({ error: '内容长度需在 1-50000 个字符之间' });
-    }
+    const validationError = validateArticle(title, content, tags);
+    if (validationError) return res.status(400).json({ error: validationError });
 
     const safeTitle = sanitizeInput(title);
     // Markdown 内容保留原始格式，不做 HTML 转义（前端渲染时用 DOMPurify 清洗）
     const userId = req.user.id;
     const readTime = calculateReadTime(content);
+    const moderation = analyzeArticle({ title: safeTitle, content, tags });
 
     const result = await dbRun(
-      'INSERT INTO articles (title, content, user_id, read_time, cover_image) VALUES (?, ?, ?, ?, ?)',
-      [safeTitle, content, userId, readTime, req.body.cover_image || null]
+      'INSERT INTO articles (title, content, user_id, read_time, cover_image, moderation_status, moderation_json, moderation_revision, publication_rewarded) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0)',
+      [safeTitle, content, userId, readTime, req.body.cover_image || null, moderation.decision, JSON.stringify(moderation)]
     );
 
     // 设置标签
@@ -314,14 +315,12 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const articleTags = await getArticleTags(result.lastID);
 
-    const xp = await grantXP(userId, 50, 'publish_article', 'article', result.lastID);
-    await addActivity(userId, 'publish_article', '发布了文章「' + safeTitle + '」', 'article', result.lastID, { title: safeTitle });
-    const achievements = await checkAchievements(userId, 'publish_article', { hour: new Date().getHours() });
+    const gamification = await rewardPublication(result.lastID);
 
     res.status(201).json({
-      message: '文章创建成功',
-      article: { id: result.lastID, title: safeTitle, user_id: userId, tags: articleTags },
-      gamification: { xp, achievements }
+      message: moderationMessage(moderation.decision), moderation,
+      article: { id: result.lastID, title: safeTitle, user_id: userId, tags: articleTags, moderation_status: moderation.decision },
+      gamification
     });
   } catch (err) {
     console.error('[ARTICLES] 创建错误:', err.message);
@@ -341,7 +340,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     // 检查文章是否存在且属于当前用户
     const article = await dbGet(
-      'SELECT id, user_id FROM articles WHERE id = ?',
+      'SELECT id, user_id FROM articles WHERE id = ? AND deleted_at IS NULL',
       [id]
     );
 
@@ -353,20 +352,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: '无权修改此文章' });
     }
 
-    if (!title || !content) {
-      return res.status(400).json({ error: '标题和内容不能为空' });
-    }
-
-    if (!isValidTitle(title) || !isValidContent(content)) {
-      return res.status(400).json({ error: '标题或内容长度不合法' });
-    }
+    const validationError = validateArticle(title, content, tags);
+    if (validationError) return res.status(400).json({ error: validationError });
 
     const safeTitle = sanitizeInput(title);
     const readTime = calculateReadTime(content);
+    const effectiveTags = tags === undefined ? (await getArticleTags(id)).map((tag) => tag.name) : tags;
+    const moderation = analyzeArticle({ title: safeTitle, content, tags: effectiveTags });
 
     await dbRun(
-      'UPDATE articles SET title = ?, content = ?, read_time = ?, cover_image = COALESCE(?, cover_image) WHERE id = ?',
-      [safeTitle, content, readTime, req.body.cover_image || null, id]
+      'UPDATE articles SET title = ?, content = ?, read_time = ?, cover_image = COALESCE(?, cover_image), moderation_status = ?, moderation_json = ?, moderation_revision = moderation_revision + 1 WHERE id = ? AND deleted_at IS NULL',
+      [safeTitle, content, readTime, req.body.cover_image || null, moderation.decision, JSON.stringify(moderation), id]
     );
 
     // 更新标签
@@ -374,7 +370,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       await setArticleTags(id, tags);
     }
 
-    res.json({ message: '文章更新成功' });
+    const gamification = await rewardPublication(id);
+    res.json({ message: moderationMessage(moderation.decision), moderation, gamification });
   } catch (err) {
     console.error('[ARTICLES] 更新错误:', err.message);
     res.status(500).json({ error: '服务器内部错误' });

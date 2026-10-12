@@ -9,10 +9,12 @@ const { dbAll } = require('../database');
 router.get('/', async (req, res) => {
   try {
     const tags = await dbAll(
-      `SELECT tags.id, tags.name, COUNT(article_tags.article_id) as article_count
+      `SELECT tags.id, tags.name, COUNT(articles.id) as article_count
        FROM tags
        LEFT JOIN article_tags ON tags.id = article_tags.tag_id
+       LEFT JOIN published_articles AS articles ON articles.id = article_tags.article_id
        GROUP BY tags.id
+       HAVING COUNT(articles.id) > 0
        ORDER BY article_count DESC, tags.name ASC`
     );
 

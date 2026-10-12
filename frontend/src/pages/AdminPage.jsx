@@ -37,8 +37,10 @@ import {
   updateAdminUserStatusApi,
 } from '../api';
 import { getDisplayName } from '../utils/displayName';
+import ModerationQueue from '../components/ModerationQueue';
 
 const TABS = [
+  { key: 'moderation', label: '待审', icon: Shield },
   { key: 'users', label: '用户', icon: Users },
   { key: 'articles', label: '文章', icon: FileText },
   { key: 'comments', label: '评论', icon: MessageCircle },
@@ -48,6 +50,7 @@ const TABS = [
 ];
 
 const TAB_TITLES = {
+  moderation: '发布审核',
   users: '用户状态',
   articles: '文章审核',
   comments: '评论审核',
@@ -57,6 +60,8 @@ const TAB_TITLES = {
 };
 
 const ACTION_LABELS = {
+  approve: '审核通过',
+  reject: '审核驳回',
   delete: '删除',
   ban: '封禁',
   unban: '解封',
@@ -85,7 +90,7 @@ function includesQuery(values, query) {
 export default function AdminPage() {
   const { isAuthenticated, user } = useAuth();
   const confirm = useConfirm();
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('moderation');
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState('');
   const [error, setError] = useState('');
@@ -224,7 +229,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-2 py-2 sm:px-4 sm:py-4">
+    <div className="w-full max-w-6xl mx-auto px-2 pt-2 pb-24 sm:px-4 sm:pt-4 lg:pb-4">
       <section className="mb-4 rounded-2xl border border-app-border bg-app-card p-4 shadow-card sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
@@ -307,9 +312,9 @@ export default function AdminPage() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <h2 className="text-base font-bold text-app-text">{TAB_TITLES[activeTab]}</h2>
-                    <p className="text-xs text-app-subtext">当前显示 {currentCount} 条</p>
+                    {activeTab !== 'moderation' && <p className="text-xs text-app-subtext">当前显示 {currentCount} 条</p>}
                   </div>
-                  <div className="flex flex-1 flex-col gap-2 sm:flex-row md:max-w-xl">
+                  {activeTab !== 'moderation' && <div className="flex flex-1 flex-col gap-2 sm:flex-row md:max-w-xl">
                     <div className="relative flex-1">
                       <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-app-subtext" />
                       <input
@@ -354,10 +359,11 @@ export default function AdminPage() {
                         </select>
                       </div>
                     )}
-                  </div>
+                  </div>}
                 </div>
               </div>
 
+              {activeTab === 'moderation' && <ModerationQueue />}
               {activeTab === 'users' && (
                 <UserList
                   users={filteredUsers}

@@ -4,6 +4,14 @@ const { dbGet, dbRun, dbAll, createNotification } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 const { grantXP, checkAchievements, addActivity } = require('./gamification');
 
+router.use(async (req, res, next) => {
+  try {
+    const article = await dbGet('SELECT id FROM published_articles WHERE id = ?', [req.params.id]);
+    if (!article) return res.status(404).json({ error: '文章不存在' });
+    next();
+  } catch (err) { res.status(500).json({ error: '服务器内部错误' }); }
+});
+
 /**
  * 输入清理 — 防 XSS
  */

@@ -2,8 +2,47 @@ const express = require('express');
 const router = express.Router();
 const { dbGet, dbRun, dbAll } = require('../database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { rewardPublication, moderationMessage } = require('../moderation/service');
 
 router.use(authenticateToken, requireAdmin);
+
+router.get('/moderation', async (req, res) => {
+  try {
+    const status = ['review', 'pending', 'held', 'rejected', 'published'].includes(req.query.status) ? req.query.status : null;
+    const filter = status === 'review' ? "AND a.moderation_status IN ('pending', 'held')" : status ? 'AND a.moderation_status = ?' : '';
+    const articles = await dbAll(`SELECT a.id, a.title, a.content, a.moderation_status, a.moderation_revision,
+      a.moderation_json, a.created_at, u.username, u.nickname FROM articles a JOIN users u ON u.id = a.user_id
+      WHERE a.deleted_at IS NULL ${filter}
+      ORDER BY CASE a.moderation_status WHEN 'held' THEN 0 WHEN 'pending' THEN 1 WHEN 'rejected' THEN 2 ELSE 3 END,
+      a.created_at DESC LIMIT ?`, [...(status && status !== 'review' ? [status] : []), parseLimit(req.query.limit, 100, 200)]);
+    res.json({ articles: articles.map((article) => ({ ...article, moderation: JSON.parse(article.moderation_json || 'null'), moderation_json: undefined })) });
+  } catch (err) { res.status(500).json({ error: '加载审核队列失败' }); }
+});
+
+router.patch('/moderation/:id', async (req, res) => {
+  try {
+    const { decision, revision, reason } = req.body;
+    if (!['published', 'rejected'].includes(decision) || !Number.isInteger(revision) || typeof reason !== 'string' || !reason.trim() || reason.length > 500) return res.status(400).json({ error: '请选择通过或驳回，并填写不超过500字的审核理由' });
+    const article = await dbGet('SELECT * FROM articles WHERE id = ? AND deleted_at IS NULL', [req.params.id]);
+    if (!article) return res.status(404).json({ error: '文章不存在' });
+    if (article.moderation_revision !== revision || article.moderation_status === 'rejected') return res.status(409).json({ error: '文章已修改或已审核，请刷新后重试' });
+    const previous = article.moderation_status;
+    const moderation = JSON.parse(article.moderation_json || '{}');
+    moderation.review = { decision, reason: reason.trim(), adminId: req.user.id, at: new Date().toISOString() };
+    const result = await dbRun(`UPDATE articles SET moderation_status = ?, moderation_json = ?, moderation_revision = moderation_revision + 1
+      WHERE id = ? AND moderation_revision = ? AND moderation_status = ? AND deleted_at IS NULL`, [decision, JSON.stringify(moderation), article.id, revision, previous]);
+    if (!result.changes) return res.status(409).json({ error: '文章已修改或已审核，请刷新后重试' });
+    await rewardPublication(article.id);
+    res.json({ message: moderationMessage(decision) });
+  } catch (err) { console.error('[MODERATION]', err.message); res.status(500).json({ error: '审核处理失败' }); }
+});
+
+router.get('/moderation/feedback/export', async (req, res) => {
+  try {
+    const samples = await dbAll('SELECT * FROM moderation_feedback ORDER BY id');
+    res.json({ note: '文章级人工标签；需整理片段标签并按文章分组划分数据，不能直接把违规标签赋给每个窗口。', samples });
+  } catch (err) { res.status(500).json({ error: '反馈导出失败' }); }
+});
 
 function parseLimit(value, fallback = 30, max = 100) {
   const parsed = parseInt(value, 10);

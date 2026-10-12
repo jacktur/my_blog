@@ -32,7 +32,7 @@ router.put('/articles/:id/progress', authenticateToken, async (req, res) => {
     const { scrollPercentage } = req.body;
     const safePercentage = Math.max(0, Math.min(100, Number(scrollPercentage) || 0));
 
-    const article = await dbGet('SELECT id, user_id, title FROM articles WHERE id = ?', [id]);
+    const article = await dbGet('SELECT id, user_id, title FROM published_articles WHERE id = ?', [id]);
     if (!article) {
       return res.status(404).json({ error: '文章不存在' });
     }

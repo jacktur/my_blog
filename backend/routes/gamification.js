@@ -103,11 +103,11 @@ async function getAchievementProgress(userId, achievement) {
   let current = 0;
   switch (condition.field) {
     case 'articles':
-      current = (await dbGet('SELECT COUNT(*) as c FROM articles WHERE user_id = ?', [userId]))?.c || 0;
+      current = (await dbGet('SELECT COUNT(*) as c FROM published_articles AS articles WHERE user_id = ?', [userId]))?.c || 0;
       break;
     case 'likes':
       current = (await dbGet(
-        'SELECT COUNT(*) as c FROM likes WHERE article_id IN (SELECT id FROM articles WHERE user_id = ?)',
+        'SELECT COUNT(*) as c FROM likes WHERE article_id IN (SELECT id FROM published_articles AS articles WHERE user_id = ?)',
         [userId]
       ))?.c || 0;
       break;
@@ -130,14 +130,14 @@ async function getAchievementProgress(userId, achievement) {
       current = (await dbGet(
         `SELECT COUNT(DISTINCT t.id) as c FROM tags t
          JOIN article_tags at ON t.id = at.tag_id
-         JOIN articles a ON at.article_id = a.id
+         JOIN published_articles a ON at.article_id = a.id
          WHERE a.user_id = ?`,
         [userId]
       ))?.c || 0;
       break;
     case 'code_articles':
       current = (await dbGet(
-        `SELECT COUNT(*) as c FROM articles
+        `SELECT COUNT(*) as c FROM published_articles AS articles
          WHERE user_id = ? AND content LIKE '%\`\`\`%'`,
         [userId]
       ))?.c || 0;
@@ -285,12 +285,12 @@ async function checkAchievements(userId, triggerEvent, context = {}) {
         let actualCount = 0;
         switch (ach.condition.field) {
           case 'articles':
-            const r1 = await dbGet('SELECT COUNT(*) as c FROM articles WHERE user_id = ?', [userId]);
+            const r1 = await dbGet('SELECT COUNT(*) as c FROM published_articles AS articles WHERE user_id = ?', [userId]);
             actualCount = r1.c;
             break;
           case 'likes':
             const r2 = await dbGet(
-              'SELECT COUNT(*) as c FROM likes WHERE article_id IN (SELECT id FROM articles WHERE user_id = ?)',
+              'SELECT COUNT(*) as c FROM likes WHERE article_id IN (SELECT id FROM published_articles AS articles WHERE user_id = ?)',
               [userId]
             );
             actualCount = r2.c;
@@ -318,7 +318,7 @@ async function checkAchievements(userId, triggerEvent, context = {}) {
             const r6 = await dbGet(
               `SELECT COUNT(DISTINCT t.id) as c FROM tags t
                JOIN article_tags at ON t.id = at.tag_id
-               JOIN articles a ON at.article_id = a.id
+               JOIN published_articles a ON at.article_id = a.id
                WHERE a.user_id = ?`,
               [userId]
             );
@@ -326,7 +326,7 @@ async function checkAchievements(userId, triggerEvent, context = {}) {
             break;
           case 'code_articles':
             const r7 = await dbGet(
-              `SELECT COUNT(*) as c FROM articles
+              `SELECT COUNT(*) as c FROM published_articles AS articles
                WHERE user_id = ? AND content LIKE '%\`\`\`%'`,
               [userId]
             );
@@ -582,12 +582,12 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
     ] = await Promise.all([
       dbGet('SELECT id, username, nickname, avatar, xp, level, current_streak, max_streak, created_at FROM users WHERE id = ?', [userId]),
 
-      dbGet('SELECT COUNT(*) as count FROM articles WHERE user_id = ?', [userId]),
-      dbGet('SELECT COUNT(*) as count FROM likes WHERE article_id IN (SELECT id FROM articles WHERE user_id = ?)', [userId]),
-      dbGet('SELECT COUNT(*) as count FROM comments WHERE article_id IN (SELECT id FROM articles WHERE user_id = ?)', [userId]),
+      dbGet('SELECT COUNT(*) as count FROM published_articles AS articles WHERE user_id = ?', [userId]),
+      dbGet('SELECT COUNT(*) as count FROM likes WHERE article_id IN (SELECT id FROM published_articles AS articles WHERE user_id = ?)', [userId]),
+      dbGet('SELECT COUNT(*) as count FROM comments WHERE article_id IN (SELECT id FROM published_articles AS articles WHERE user_id = ?)', [userId]),
       dbAll(
         `SELECT COALESCE(SUM(article_views), 0) as count FROM
-         (SELECT COUNT(*) as article_views FROM article_views WHERE article_id IN (SELECT id FROM articles WHERE user_id = ?) GROUP BY article_id)`,
+         (SELECT COUNT(*) as article_views FROM article_views WHERE article_id IN (SELECT id FROM published_articles AS articles WHERE user_id = ?) GROUP BY article_id)`,
         [userId]
       ).then(r => ({ count: r[0]?.count || 0 })),
 
@@ -595,13 +595,15 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
       dbGet('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?', [userId]),
 
       dbAll(
-        `SELECT * FROM activity_feed WHERE user_id = ? ORDER BY created_at DESC LIMIT 20`,
+        `SELECT * FROM activity_feed WHERE user_id = ?
+         AND (reference_type IS NULL OR reference_type != 'article' OR reference_id IN (SELECT id FROM published_articles))
+         ORDER BY created_at DESC LIMIT 20`,
         [userId]
       ),
       dbAll(
         `SELECT rp.article_id, a.title, rp.scroll_percentage, rp.updated_at
          FROM reading_progress rp
-         JOIN articles a ON rp.article_id = a.id
+         JOIN published_articles a ON rp.article_id = a.id
          WHERE rp.user_id = ? ORDER BY rp.updated_at DESC LIMIT 10`,
         [userId]
       ),

@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Edit3, FileText, Loader2, Send, Trash2 } from 'lucide-react';
-import { deleteDraftApi, getDraftsApi, publishDraftApi } from '../api';
+import { deleteDraftApi, getDraftsApi, publishDraftApi, getMySubmissionsApi } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../components/ConfirmDialog';
+import { MODERATION_LABELS } from '../components/ModerationEvidence';
+import { useXpNotification } from '../components/XPNotification';
 
 export default function DraftsPage() {
   const { isAuthenticated } = useAuth();
   const confirm = useConfirm();
   const navigate = useNavigate();
   const [drafts, setDrafts] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
+  const { notifyGamification } = useXpNotification();
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
@@ -20,6 +24,7 @@ export default function DraftsPage() {
     try {
       const res = await getDraftsApi();
       setDrafts(res.data.drafts || []);
+      setSubmissions((await getMySubmissionsApi()).data.articles || []);
     } catch (err) {
       setError(err.response?.data?.error || '草稿加载失败');
     } finally {
@@ -41,6 +46,7 @@ export default function DraftsPage() {
     setError('');
     try {
       const res = await publishDraftApi(draft.id);
+      notifyGamification(res.data.gamification);
       navigate(`/article/${res.data.article.id}`);
     } catch (err) {
       setError(err.response?.data?.error || '发布草稿失败');
@@ -81,7 +87,7 @@ export default function DraftsPage() {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <FileText size={20} className="text-app-blue" />
-          <h1 className="text-lg font-bold text-app-text">草稿箱</h1>
+          <h1 className="text-lg font-bold text-app-text">草稿与投稿</h1>
         </div>
         <Link to="/create" className="text-xs text-app-blue hover:underline">写新文章</Link>
       </div>
@@ -91,6 +97,14 @@ export default function DraftsPage() {
           {error}
         </div>
       )}
+
+      {submissions.length > 0 && <section className="mb-5 border-b border-app-border pb-4">
+        <h2 className="mb-2 text-sm font-semibold">我的投稿</h2>
+        {submissions.map((article) => <div key={article.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+          <Link className="min-w-0 break-words text-app-blue" to={`/article/${article.id}`}>{article.title}</Link>
+          <span className="shrink-0 text-xs text-app-subtext">{MODERATION_LABELS[article.moderation_status]}</span>
+        </div>)}
+      </section>}
 
       {loading ? (
         <div className="flex justify-center py-12">

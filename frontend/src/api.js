@@ -57,6 +57,10 @@ export const createArticleApi = (title, content, tags, extra = {}) =>
 export const updateArticleApi = (id, title, content, tags, extra = {}) =>
   api.put(`/articles/${id}`, { title, content, tags, ...extra });
 export const deleteArticleApi = (id) => api.delete(`/articles/${id}`);
+export const getMySubmissionsApi = () => api.get('/articles/mine/submissions');
+export const getModerationQueueApi = (status) => api.get('/admin/moderation', { params: { status } });
+export const reviewArticleApi = (id, decision, revision, reason) => api.patch(`/admin/moderation/${id}`, { decision, revision, reason });
+export const exportModerationFeedbackApi = () => api.get('/admin/moderation/feedback/export');
 
 // ====== Following API ======
 export const getFollowingArticlesApi = (params = {}) =>

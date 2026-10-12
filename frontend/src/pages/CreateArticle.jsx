@@ -8,6 +8,7 @@ import { ArrowLeft, Eye, FileText, Save } from 'lucide-react';
 import TagInput from '../components/TagInput';
 import CoverImageUploader from '../components/CoverImageUploader';
 import { useXpNotification } from '../components/XPNotification';
+import ModerationEvidence from '../components/ModerationEvidence';
 
 export default function CreateArticle() {
   const { id } = useParams(); const isEdit = !!id;
@@ -21,6 +22,7 @@ export default function CreateArticle() {
   const [tags, setTags] = useState([]); const [coverImage, setCoverImage] = useState('');
   const [error, setError] = useState(''); const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
+  const [moderation, setModeration] = useState(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftId, setDraftId] = useState(initialDraftId);
   const [dirty, setDirty] = useState(false);
@@ -108,7 +110,11 @@ export default function CreateArticle() {
     setLoading(true);
     try {
       const articleData = { cover_image: coverImage || undefined };
-      if (isEdit) await updateArticleApi(id, t, c, tags, articleData);
+      if (isEdit) {
+        const res = await updateArticleApi(id, t, c, tags, articleData);
+        setModeration(res.data.moderation);
+        notifyGamification(res.data.gamification);
+      }
       else {
         const res = await createArticleApi(t, c, tags, articleData);
         if (seriesId) await addArticleToSeriesApi(seriesId, res.data.article.id).catch(() => {});
@@ -177,6 +183,7 @@ export default function CreateArticle() {
         )}
         <div className="px-3 py-2 rounded-xl bg-app-bg border border-app-border"><p className="text-app-subtext text-xs">支持 Markdown 语法</p></div>
         {success && <div className="px-3 py-2 rounded-xl bg-green-50 border border-green-100"><p className="text-app-green text-xs">{success}</p></div>}
+        {moderation && <ModerationEvidence moderation={moderation} status={moderation.decision} />}
         {error && <div className="px-3 py-2 rounded-xl bg-red-50 border border-red-100"><p className="text-app-red text-xs">{error}</p></div>}
         <div className="flex gap-3">
           <button type="submit" disabled={loading}

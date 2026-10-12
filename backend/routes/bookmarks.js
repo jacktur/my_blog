@@ -28,7 +28,7 @@ router.get('/', authenticateToken, async (req, res) => {
               (SELECT COUNT(*) FROM comments WHERE comments.article_id = articles.id) as comment_count,
               (SELECT COUNT(*) FROM likes WHERE likes.article_id = articles.id) as like_count
        FROM bookmarks
-       JOIN articles ON bookmarks.article_id = articles.id
+       JOIN published_articles AS articles ON bookmarks.article_id = articles.id
        JOIN users ON articles.user_id = users.id
        WHERE bookmarks.user_id = ?
        ORDER BY bookmarks.created_at DESC
@@ -79,7 +79,7 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     // 检查文章是否存在
-    const article = await dbGet('SELECT id FROM articles WHERE id = ?', [article_id]);
+    const article = await dbGet('SELECT id FROM published_articles WHERE id = ?', [article_id]);
     if (!article) {
       return res.status(404).json({ error: '文章不存在' });
     }

@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
     const series = await dbAll(
       `SELECT s.id, s.title, s.description, s.cover_image, s.user_id, u.username, u.nickname,
               s.created_at,
-              (SELECT COUNT(*) FROM series_articles WHERE series_id = s.id) as article_count
+              (SELECT COUNT(*) FROM series_articles sa JOIN published_articles a ON a.id = sa.article_id WHERE sa.series_id = s.id) as article_count
        FROM series s
        JOIN users u ON s.user_id = u.id
        ORDER BY s.updated_at DESC`
@@ -76,7 +76,7 @@ router.get('/:id', async (req, res) => {
       `SELECT a.id, a.title, substr(a.content, 1, 200) as excerpt, a.created_at, a.read_time,
               sa.position
        FROM series_articles sa
-       JOIN articles a ON sa.article_id = a.id
+       JOIN published_articles a ON sa.article_id = a.id
        WHERE sa.series_id = ? AND a.deleted_at IS NULL
        ORDER BY sa.position ASC`,
       [id]

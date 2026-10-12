@@ -19,6 +19,7 @@ import {
   decryptMessage,
   isEncryptedMessage
 } from '../utils/e2ee';
+import { createOutgoingChatContent } from '../utils/chatMessage';
 import ChatSidebar from '../components/chat/ChatSidebar';
 import ChatContent from '../components/chat/ChatContent';
 
@@ -170,7 +171,7 @@ export default function ChatPage() {
       cryptoContextRef.current = null;
       setCryptoStatus('error');
       setCryptoInfo({ status: 'error', message: err.message });
-      return null;
+      throw err;
     }
   }, [user]);
 
@@ -287,18 +288,14 @@ export default function ChatPage() {
       if (!context || context.conversationId !== activeConvId) {
         context = await prepareConversationCrypto(activeConvId);
       }
-      if (!context) {
-        throw new Error('正在等待双方建立安全密钥，请稍后重试');
-      }
-
-      const encryptedContent = await encryptMessage({
+      const outgoingContent = await createOutgoingChatContent({
+        content,
         conversationId: activeConvId,
         senderId: user.id,
-        plaintext: content.trim(),
-        identity: context.identity,
-        peerKey: context.peerKey
+        context,
+        encryptMessage
       });
-      const res = await sendMessageApi(activeConvId, encryptedContent);
+      const res = await sendMessageApi(activeConvId, outgoingContent);
       const [decodedMessage] = await decodeMessages([res.data.message], context);
       appendMessage(decodedMessage);
       fetchConversations();
