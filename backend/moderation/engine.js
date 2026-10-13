@@ -1,5 +1,6 @@
 const { createHash } = require('node:crypto');
 const { splitWindows, signals, vectorize, STRUCTURE } = require('./features');
+const { detectAttack } = require('./attack');
 
 const sigmoid = (value) => 1 / (1 + Math.exp(-value));
 function scoreWindow(window, model) {
@@ -7,7 +8,8 @@ function scoreWindow(window, model) {
   const contributions = vector.map((value, i) => ({ feature: model.vocabulary[i] || STRUCTURE[i - model.vocabulary.length], value: value * model.weights[i] }));
   const score = sigmoid(contributions.reduce((sum, entry) => sum + entry.value, 0));
   const context = signals(window.text);
-  return { ...window, score, coverage, context,
+  const attack = detectAttack(window.text);
+  return { ...window, score: Math.max(score, attack.direct ? 0.9 : 0), coverage, context, attack,
     features: contributions.filter((entry) => entry.value > 0).sort((a, b) => b.value - a.value).slice(0, 5) };
 }
 
@@ -30,12 +32,13 @@ function analyzeArticle(article, model = require('./model.json')) {
     if (window.score < model.thresholds.review && !window.context.combination) continue;
     if (evidence.some((other) => other.field === window.field && window.start < other.end && window.end > other.start)) continue;
     evidence.push({ field: window.field, start: window.start, end: window.end, text: window.text,
-      score: Number(window.score.toFixed(4)), context: window.context.warning ? 'warning_or_quote' : 'direct_or_uncertain',
-      reasons: [window.context.combination ? '收益承诺、招揽话术与联系方式共同出现' : '文本分类模型识别到风险表达',
-        ...(window.context.warning ? ['同时出现防范语境，需要结合全文复核'] : [])], features: window.features });
+      score: Number(window.score.toFixed(4)), context: window.context.warning || window.attack.contextual ? 'warning_or_quote' : 'direct_or_uncertain',
+      reasons: [window.attack.direct ? '明确的人身攻击或恶意表达组合，规则将风险分值提高至至少90分' : window.context.combination ? '收益承诺、招揽话术与联系方式共同出现' : '文本分类模型识别到风险表达',
+        ...(window.context.warning || window.attack.contextual ? ['同时出现防范或引用语境，需要结合全文复核'] : [])], features: window.features });
     if (evidence.length === 8) break;
   }
   return { decision, score: Number(score.toFixed(4)), modelVersion: model.version, calibrated: false,
+    ruleVersion: 'direct-attack-v1',
     contentHash: createHash('sha256').update(JSON.stringify(fields)).digest('hex'),
     summary: { maximum, topMean, riskyRatio, windowCount: windows.length, combination, conflict, uncertain }, evidence };
 }

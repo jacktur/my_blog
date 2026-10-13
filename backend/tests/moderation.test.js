@@ -3,6 +3,34 @@ const assert = require('node:assert/strict');
 const { analyzeArticle } = require('../moderation/engine');
 const { normalize, splitWindows, ngrams } = require('../moderation/features');
 const { validateDataset } = require('../moderation/train');
+const { detectAttack } = require('../moderation/attack');
+
+test('direct attacks receive a high-risk floor with an explicit explanation', () => {
+  for (const content of ['你这个垃圾废物，去死吧。', '你就是个蠢货。', '去死吧。', '你这个垃.圾废\u200b物。']) {
+    const result = analyzeArticle({ content });
+    assert.equal(result.decision, 'held', content);
+    assert.ok(result.score >= 0.9);
+    assert.ok(result.evidence.some(item => item.reasons.some(reason => reason.includes('人身攻击'))));
+    assert.equal(result.calibrated, false);
+  }
+  for (const field of ['title', 'tags']) {
+    const result = analyzeArticle({ content: '普通技术记录', [field]: field === 'tags' ? ['你这个废物'] : '你这个废物' });
+    assert.equal(result.decision, 'held');
+  }
+  const long = analyzeArticle({ content: '普通技术记录。\n\n'.repeat(100) + '你这个废物，去死吧。' });
+  assert.equal(long.decision, 'held');
+});
+
+test('attack rules do not treat object descriptions or explicit reporting as direct attacks', () => {
+  for (const content of ['这个垃圾文件需要清理。', '这个废物回收项目由他负责。',
+    '报道记录有人辱骂他人：你这个垃圾废物，去死吧。我们反对人身攻击。',
+    '不要对别人说你这个废物，去死吧。',
+    '引用原话：“你这个垃圾废物，去死吧。”我们反对辱骂。']) {
+    assert.equal(detectAttack(content).direct, false, content);
+  }
+  assert.equal(detectAttack('引用原话：“你这个废物。”你这个垃圾，去死吧。').direct, true);
+  assert.equal(detectAttack('反对人身攻击。\n\n你这个废物，去死吧。').direct, true);
+});
 
 test('normal text, contact details and cautionary prose are not keyword-blocked', () => {
   for (const content of ['今天分享个人博客搭建过程，使用 React 开发页面。',
